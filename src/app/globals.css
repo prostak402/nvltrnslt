@@ -1,0 +1,74 @@
+@import "tailwindcss";
+
+:root {
+  --background: #0d0f17;
+  --background-secondary: #141726;
+  --background-card: #1a1d2e;
+  --background-hover: #222640;
+  --foreground: #e8eaf0;
+  --foreground-secondary: #9ca3b4;
+  --foreground-muted: #6b7280;
+  --accent: #6c5ce7;
+  --accent-hover: #7c6ef7;
+  --accent-light: rgba(108, 92, 231, 0.15);
+  --accent-secondary: #00cec9;
+  --accent-secondary-light: rgba(0, 206, 201, 0.15);
+  --border: #2a2d3e;
+  --border-hover: #3a3d4e;
+  --success: #00b894;
+  --warning: #fdcb6e;
+  --danger: #e17055;
+  --danger-light: rgba(225, 112, 85, 0.15);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-background-secondary: var(--background-secondary);
+  --color-background-card: var(--background-card);
+  --color-background-hover: var(--background-hover);
+  --color-foreground: var(--foreground);
+  --color-foreground-secondary: var(--foreground-secondary);
+  --color-foreground-muted: var(--foreground-muted);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-light: var(--accent-light);
+  --color-accent-secondary: var(--accent-secondary);
+  --color-accent-secondary-light: var(--accent-secondary-light);
+  --color-border: var(--border);
+  --color-border-hover: var(--border-hover);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+  --color-danger-light: var(--danger-light);
+  --font-sans: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", "Fira Code", "Cascadia Code", monospace;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--background-secondary);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--border-hover);
+}
+
+/* Smooth scroll */
+html {
+  scroll-behavior: smooth;
+}
