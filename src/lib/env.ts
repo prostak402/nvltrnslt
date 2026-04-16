@@ -12,6 +12,7 @@ type ServerEnv = {
   AUTH_SECRET: string;
   DATABASE_URL: string;
   BILLING_MODE: BillingMode;
+  SITE_URL?: string;
   TELEGRAM_BOT_TOKEN?: string;
   TELEGRAM_CHAT_ID?: string;
   TELEGRAM_MESSAGE_THREAD_ID?: number;
@@ -135,6 +136,30 @@ function validateDatabaseUrl(databaseUrl: string) {
   return databaseUrl;
 }
 
+function validateOptionalSiteUrl(name: keyof ServerEnv) {
+  const rawValue = readTrimmedEnv(name);
+  if (!rawValue) {
+    return undefined;
+  }
+
+  let parsed: URL;
+  try {
+    parsed = new URL(rawValue);
+  } catch {
+    throw new Error(
+      formatEnvError(
+        `${name} must be a valid absolute URL, for example https://213.159.209.216`,
+      ),
+    );
+  }
+
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    throw new Error(formatEnvError(`${name} must start with http:// or https://`));
+  }
+
+  return parsed.origin;
+}
+
 function loadServerEnv(): ServerEnv {
   const AUTH_SECRET = validateRequiredEnv("AUTH_SECRET", {
     minLength: 32,
@@ -146,6 +171,7 @@ function loadServerEnv(): ServerEnv {
     }),
   );
   const BILLING_MODE = validateEnumEnv("BILLING_MODE", BILLING_MODES, "disabled");
+  const SITE_URL = validateOptionalSiteUrl("SITE_URL");
   const TELEGRAM_BOT_TOKEN = readTrimmedEnv("TELEGRAM_BOT_TOKEN");
   const TELEGRAM_CHAT_ID = readTrimmedEnv("TELEGRAM_CHAT_ID");
   const TELEGRAM_MESSAGE_THREAD_ID = validateOptionalIntegerEnv(
@@ -196,6 +222,7 @@ function loadServerEnv(): ServerEnv {
     AUTH_SECRET,
     DATABASE_URL,
     BILLING_MODE,
+    SITE_URL,
     TELEGRAM_BOT_TOKEN,
     TELEGRAM_CHAT_ID,
     TELEGRAM_MESSAGE_THREAD_ID,
