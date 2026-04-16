@@ -18,6 +18,7 @@ type ServerEnv = {
   SMTP_HOST?: string;
   SMTP_PORT?: number;
   SMTP_SECURE?: boolean;
+  SMTP_IGNORE_TLS?: boolean;
   SMTP_USER?: string;
   SMTP_PASSWORD?: string;
   TELEGRAM_BOT_TOKEN?: string;
@@ -243,6 +244,7 @@ function loadServerEnv(): ServerEnv {
   const SMTP_HOST = readTrimmedEnv("SMTP_HOST");
   const SMTP_PORT = validateOptionalIntegerEnv("SMTP_PORT", { min: 1 });
   const SMTP_SECURE = validateOptionalBooleanEnv("SMTP_SECURE");
+  const SMTP_IGNORE_TLS = validateOptionalBooleanEnv("SMTP_IGNORE_TLS");
   const SMTP_USER = readTrimmedEnv("SMTP_USER");
   const SMTP_PASSWORD = readTrimmedEnv("SMTP_PASSWORD");
   const TELEGRAM_BOT_TOKEN = readTrimmedEnv("TELEGRAM_BOT_TOKEN");
@@ -268,6 +270,7 @@ function loadServerEnv(): ServerEnv {
     Boolean(SMTP_HOST),
     SMTP_PORT !== undefined,
     SMTP_SECURE !== undefined,
+    SMTP_IGNORE_TLS !== undefined,
     Boolean(SMTP_USER),
     Boolean(SMTP_PASSWORD),
   ].some(Boolean);
@@ -329,6 +332,7 @@ function loadServerEnv(): ServerEnv {
     SMTP_HOST,
     SMTP_PORT: SMTP_HOST ? (SMTP_PORT ?? 25) : undefined,
     SMTP_SECURE: SMTP_HOST ? (SMTP_SECURE ?? (SMTP_PORT === 465)) : undefined,
+    SMTP_IGNORE_TLS: SMTP_HOST ? (SMTP_IGNORE_TLS ?? false) : undefined,
     SMTP_USER,
     SMTP_PASSWORD,
     TELEGRAM_BOT_TOKEN,

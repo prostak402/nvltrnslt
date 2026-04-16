@@ -36,6 +36,7 @@ type EmailConfig = {
   host: string;
   port: number;
   secure: boolean;
+  ignoreTLS: boolean;
   auth?: {
     user: string;
     pass: string;
@@ -52,8 +53,16 @@ function emailConfig(): EmailConfig | null {
   const host = serverEnv.SMTP_HOST;
   const port = serverEnv.SMTP_PORT;
   const secure = serverEnv.SMTP_SECURE;
+  const ignoreTLS = serverEnv.SMTP_IGNORE_TLS;
 
-  if (!to?.length || !from || !host || !port || secure === undefined) {
+  if (
+    !to?.length ||
+    !from ||
+    !host ||
+    !port ||
+    secure === undefined ||
+    ignoreTLS === undefined
+  ) {
     return null;
   }
 
@@ -64,6 +73,7 @@ function emailConfig(): EmailConfig | null {
       host,
       port,
       secure,
+      ignoreTLS,
       auth: {
         user: serverEnv.SMTP_USER,
         pass: serverEnv.SMTP_PASSWORD,
@@ -77,6 +87,7 @@ function emailConfig(): EmailConfig | null {
     host,
     port,
     secure,
+    ignoreTLS,
   };
 }
 
@@ -94,6 +105,7 @@ function getTransporter() {
     host: config.host,
     port: config.port,
     secure: config.secure,
+    ignoreTLS: config.ignoreTLS,
     auth: config.auth,
   });
 

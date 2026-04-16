@@ -194,6 +194,7 @@ BOOTSTRAP_ADMIN_PASSWORD=
 - `ALERT_EMAIL_TO` — один или несколько email-адресов получателей через запятую.
 - `ALERT_EMAIL_FROM` — адрес отправителя, например `alerts@nvlingo.ru`.
 - `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE` — SMTP endpoint.
+- `SMTP_IGNORE_TLS=true` полезен для локального exim/postfix внутри той же VPS или docker-сети, если сервер рекламирует `STARTTLS` с self-signed сертификатом.
 - `SMTP_USER` и `SMTP_PASSWORD` опциональны; если сервер принимает локальный relay без авторизации, их можно оставить пустыми.
 - `adminNotifications` управляет внешними уведомлениями о новых тикетах поддержки.
 - `errorAlerts` управляет внешними уведомлениями о деградации health/readiness, 5xx-ошибках и ошибках backup.
