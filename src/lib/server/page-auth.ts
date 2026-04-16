@@ -11,10 +11,6 @@ export async function requireDashboardPageUser() {
     redirect("/auth/login");
   }
 
-  if (user.role === "admin") {
-    redirect("/admin");
-  }
-
   return user;
 }
 

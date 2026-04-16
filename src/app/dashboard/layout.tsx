@@ -22,10 +22,6 @@ export default async function DashboardLayout({
     redirect("/auth/login");
   }
 
-  if (user.role === "admin") {
-    redirect("/admin");
-  }
-
   if (maintenanceMode) {
     return <MaintenanceView />;
   }
