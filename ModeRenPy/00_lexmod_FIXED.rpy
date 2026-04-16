@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 init -999 python:
     import json
     import os
@@ -690,15 +692,19 @@ init -999 python:
         except Exception:
             return False
 
-    def lex_load_activation_file(notify=True, restart=True, apply_api_base=True):
+    def lex_normalize_api_base(value):
+        base = lex_to_text(value).strip()
+        if (not base) or (base == LEX_DEFAULT_API_BASE):
+            return ""
+        if (not base.startswith("http://")) and (not base.startswith("https://")):
+            return ""
+        while base.endswith("/"):
+            base = base[:-1]
+        return base
+
+    def lex_read_activation_file_payload():
         if not lex_activation_file_present():
-            persistent.lex_last_sync_error = "Файл активации не найден в game/"
-            store.lex_translate_error = persistent.lex_last_sync_error
-            if notify:
-                renpy.notify("Файл активации не найден в game/")
-            if restart:
-                renpy.restart_interaction()
-            return False
+            return None
 
         try:
             file_path = lex_activation_file_path()
@@ -722,12 +728,62 @@ init -999 python:
             payload = {}
 
         activation_key = lex_to_text(payload.get("activationKey")).strip().upper()
-        api_base = lex_to_text(payload.get("apiBaseUrl")).strip()
+        api_base = lex_normalize_api_base(payload.get("apiBaseUrl"))
         if (not activation_key) and raw_text:
             activation_key = lex_extract_json_string(raw_text, "activationKey").strip().upper()
         if (not api_base) and raw_text:
-            api_base = lex_extract_json_string(raw_text, "apiBaseUrl").strip()
+            api_base = lex_normalize_api_base(lex_extract_json_string(raw_text, "apiBaseUrl"))
+
         if not activation_key:
+            return None
+
+        return {
+            "activationKey": activation_key,
+            "apiBaseUrl": api_base,
+        }
+
+    def lex_apply_activation_file_payload(payload, apply_api_base=True):
+        if type(payload) is not dict:
+            return "", ""
+
+        activation_key = lex_to_text(payload.get("activationKey")).strip().upper()
+        api_base = lex_normalize_api_base(payload.get("apiBaseUrl"))
+
+        if activation_key:
+            persistent.lex_activation_key = activation_key
+        if api_base and apply_api_base:
+            persistent.lex_api_base = api_base
+            store.lex_api_base_edit = api_base
+
+        return activation_key, api_base
+
+    def lex_activation_file_differs(payload):
+        if type(payload) is not dict:
+            return False
+
+        activation_key = lex_to_text(payload.get("activationKey")).strip().upper()
+        api_base = lex_normalize_api_base(payload.get("apiBaseUrl"))
+        current_key = lex_to_text(getattr(persistent, "lex_activation_key", "")).strip().upper()
+        current_api_base = lex_normalize_api_base(getattr(persistent, "lex_api_base", ""))
+
+        if activation_key and (activation_key != current_key):
+            return True
+        if api_base and (api_base != current_api_base):
+            return True
+        return False
+
+    def lex_load_activation_file(notify=True, restart=True, apply_api_base=True):
+        if not lex_activation_file_present():
+            persistent.lex_last_sync_error = "Файл активации не найден в game/"
+            store.lex_translate_error = persistent.lex_last_sync_error
+            if notify:
+                renpy.notify("Файл активации не найден в game/")
+            if restart:
+                renpy.restart_interaction()
+            return False
+
+        payload = lex_read_activation_file_payload()
+        if type(payload) is not dict:
             persistent.lex_last_sync_error = "Некорректный файл активации"
             store.lex_translate_error = persistent.lex_last_sync_error
             if notify:
@@ -736,13 +792,7 @@ init -999 python:
                 renpy.restart_interaction()
             return False
 
-        while api_base.endswith("/"):
-            api_base = api_base[:-1]
-
-        persistent.lex_activation_key = activation_key
-        if api_base and apply_api_base:
-            persistent.lex_api_base = api_base
-            store.lex_api_base_edit = api_base
+        lex_apply_activation_file_payload(payload, apply_api_base)
 
         persistent.lex_last_sync_error = ""
         store.lex_translate_error = ""
@@ -825,10 +875,28 @@ init -999 python:
 
     def lex_try_auto_activate(notify=False):
         token = (getattr(persistent, "lex_device_token", "") or "").strip()
+        payload = lex_read_activation_file_payload()
+
+        if token and lex_activation_file_differs(payload):
+            persistent.lex_device_token = ""
+            persistent.lex_linked_name = ""
+            persistent.lex_linked_email = ""
+            persistent.lex_linked_plan = ""
+            persistent.lex_last_bootstrap = {}
+            token = ""
+
+        if type(payload) is dict:
+            lex_apply_activation_file_payload(payload, True)
+
         if token:
             return True
-        if not lex_load_activation_file(notify, False):
+
+        if type(payload) is not dict:
+            if not lex_load_activation_file(notify, False):
+                return False
+        elif not getattr(persistent, "lex_activation_key", ""):
             return False
+
         return lex_activate_with_key(
             getattr(persistent, "lex_activation_key", ""),
             getattr(store, "lex_device_label_edit", "") or persistent.lex_device_label or "Ren'Py Device",
