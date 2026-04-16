@@ -19,7 +19,7 @@ if ([string]::IsNullOrWhiteSpace($Version)) {
         throw "Config file not found: $configPath"
     }
 
-    $configContents = Get-Content -LiteralPath $configPath -Raw
+    $configContents = Get-Content -LiteralPath $configPath -Raw -Encoding utf8
     $versionMatch = [regex]::Match($configContents, 'export const MOD_VERSION = "([^"]+)"')
 
     if (-not $versionMatch.Success) {
@@ -81,7 +81,7 @@ if (Test-Path $stageRoot) {
 New-Item -ItemType Directory -Force -Path $stageDir | Out-Null
 
 $stagedModPath = Join-Path $stageDir "00_lexmod_FIXED.rpy"
-$modContents = Get-Content -LiteralPath $modSourcePath -Raw
+$modContents = Get-Content -LiteralPath $modSourcePath -Raw -Encoding utf8
 $modContents = $modContents.Replace($modPlaceholder, $ApiBaseUrl)
 $modContents | Set-Content -LiteralPath $stagedModPath -Encoding utf8
 Copy-Item -LiteralPath $installNotesPath -Destination (Join-Path $stageDir "INSTALL.txt") -Force
