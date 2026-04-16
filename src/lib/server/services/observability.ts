@@ -24,7 +24,7 @@ import {
 import { getBackupStatusRecord } from "./backups";
 import { logAdmin } from "./shared";
 import { getAdminSettingsRecord } from "./site-settings";
-import { sendTelegramAlert } from "./telegram";
+import { sendAlertDelivery } from "./alert-delivery";
 
 const OBSERVABILITY_STATE_KEY = "observability_state";
 const PROBE_WRITE_INTERVAL_MS = 60 * 1000;
@@ -131,26 +131,22 @@ export async function recordServiceProbe(kind: ProbeKind, payload: ProbePayload)
     });
   });
 
-  try {
-    const settings = await getAdminSettingsRecord();
-    if (settings.errorAlerts) {
-      await sendTelegramAlert({
-        category: "error",
-        title:
-          next.transition === "recovered"
-            ? kind === "health"
-              ? "Health-check снова в норме"
-              : "Readiness снова в норме"
-            : kind === "health"
-              ? "Health-check сигнализирует деградацию"
-              : "Readiness сигнализирует неготовность",
-        lines: [summarizeChecks(payload.checks)],
-        dedupeKey: `${kind}:${payload.status}`,
-        minIntervalMs: 60_000,
-      });
-    }
-  } catch (error) {
-    console.error("[telegram-alert]", error);
+  const settings = await getAdminSettingsRecord();
+  if (settings.errorAlerts) {
+    await sendAlertDelivery({
+      category: "error",
+      title:
+        next.transition === "recovered"
+          ? kind === "health"
+            ? "Health-check снова в норме"
+            : "Readiness снова в норме"
+          : kind === "health"
+            ? "Health-check сигнализирует деградацию"
+            : "Readiness сигнализирует неготовность",
+      lines: [summarizeChecks(payload.checks)],
+      dedupeKey: `${kind}:${payload.status}`,
+      minIntervalMs: 60_000,
+    });
   }
 
   return next.state;
@@ -179,24 +175,20 @@ export async function captureObservedError(params: {
     });
   });
 
-  try {
-    const settings = await getAdminSettingsRecord();
-    if (settings.errorAlerts) {
-      await sendTelegramAlert({
-        category: "error",
-        title: "Зафиксирована серверная ошибка",
-        lines: [
-          `source: ${params.source}`,
-          `code: ${params.code}`,
-          `status: ${params.status}`,
-          `message: ${params.message}`,
-        ],
-        dedupeKey: `error:${params.source}:${params.code}:${params.status}`,
-        minIntervalMs: 300_000,
-      });
-    }
-  } catch (error) {
-    console.error("[telegram-alert]", error);
+  const settings = await getAdminSettingsRecord();
+  if (settings.errorAlerts) {
+    await sendAlertDelivery({
+      category: "error",
+      title: "Зафиксирована серверная ошибка",
+      lines: [
+        `source: ${params.source}`,
+        `code: ${params.code}`,
+        `status: ${params.status}`,
+        `message: ${params.message}`,
+      ],
+      dedupeKey: `error:${params.source}:${params.code}:${params.status}`,
+      minIntervalMs: 300_000,
+    });
   }
 }
 

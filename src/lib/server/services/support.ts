@@ -10,7 +10,7 @@ import { formatDateTimeRu } from "@/lib/server/utils";
 
 import { logActivity, logAdmin, requireUser, toIsoString } from "./shared";
 import { getAdminSettingsRecord } from "./site-settings";
-import { sendTelegramAlert } from "./telegram";
+import { sendAlertDelivery } from "./alert-delivery";
 
 const FAQ_ITEMS = [
   {
@@ -156,20 +156,16 @@ export async function createSupportTicket(
   });
 
   if (result.adminNotifications) {
-    try {
-      await sendTelegramAlert({
-        category: "admin",
-        title: "Новый тикет поддержки",
-        lines: [
-          `ticket: #${result.ticket.id}`,
-          `user: ${result.userName}`,
-          `category: ${result.ticket.category}`,
-          `subject: ${result.ticket.subject}`,
-        ],
-      });
-    } catch (error) {
-      console.error("[telegram-alert]", error);
-    }
+    await sendAlertDelivery({
+      category: "admin",
+      title: "Новый тикет поддержки",
+      lines: [
+        `ticket: #${result.ticket.id}`,
+        `user: ${result.userName}`,
+        `category: ${result.ticket.category}`,
+        `subject: ${result.ticket.subject}`,
+      ],
+    });
   }
 
   return result.ticket;

@@ -13,6 +13,13 @@ type ServerEnv = {
   DATABASE_URL: string;
   BILLING_MODE: BillingMode;
   SITE_URL?: string;
+  ALERT_EMAIL_TO?: string[];
+  ALERT_EMAIL_FROM?: string;
+  SMTP_HOST?: string;
+  SMTP_PORT?: number;
+  SMTP_SECURE?: boolean;
+  SMTP_USER?: string;
+  SMTP_PASSWORD?: string;
   TELEGRAM_BOT_TOKEN?: string;
   TELEGRAM_CHAT_ID?: string;
   TELEGRAM_MESSAGE_THREAD_ID?: number;
@@ -112,6 +119,65 @@ function validateOptionalIntegerEnv(
   return parsed;
 }
 
+function validateOptionalBooleanEnv(name: keyof ServerEnv) {
+  const rawValue = readTrimmedEnv(name);
+  if (!rawValue) {
+    return undefined;
+  }
+
+  const normalized = rawValue.toLowerCase();
+  if (normalized === "true" || normalized === "1" || normalized === "yes") {
+    return true;
+  }
+
+  if (normalized === "false" || normalized === "0" || normalized === "no") {
+    return false;
+  }
+
+  throw new Error(
+    formatEnvError(`${name} must be a boolean value like true/false.`),
+  );
+}
+
+function validateOptionalEmail(name: keyof ServerEnv) {
+  const rawValue = readTrimmedEnv(name);
+  if (!rawValue) {
+    return undefined;
+  }
+
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(rawValue)) {
+    throw new Error(formatEnvError(`${name} must be a valid email address.`));
+  }
+
+  return rawValue;
+}
+
+function validateOptionalEmailList(name: keyof ServerEnv) {
+  const rawValue = readTrimmedEnv(name);
+  if (!rawValue) {
+    return undefined;
+  }
+
+  const items = rawValue
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  if (!items.length) {
+    return undefined;
+  }
+
+  for (const item of items) {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(item)) {
+      throw new Error(
+        formatEnvError(`${name} must contain only valid email addresses.`),
+      );
+    }
+  }
+
+  return items;
+}
+
 function validateDatabaseUrl(databaseUrl: string) {
   let parsed: URL;
 
@@ -172,6 +238,13 @@ function loadServerEnv(): ServerEnv {
   );
   const BILLING_MODE = validateEnumEnv("BILLING_MODE", BILLING_MODES, "disabled");
   const SITE_URL = validateOptionalSiteUrl("SITE_URL");
+  const ALERT_EMAIL_TO = validateOptionalEmailList("ALERT_EMAIL_TO");
+  const ALERT_EMAIL_FROM = validateOptionalEmail("ALERT_EMAIL_FROM");
+  const SMTP_HOST = readTrimmedEnv("SMTP_HOST");
+  const SMTP_PORT = validateOptionalIntegerEnv("SMTP_PORT", { min: 1 });
+  const SMTP_SECURE = validateOptionalBooleanEnv("SMTP_SECURE");
+  const SMTP_USER = readTrimmedEnv("SMTP_USER");
+  const SMTP_PASSWORD = readTrimmedEnv("SMTP_PASSWORD");
   const TELEGRAM_BOT_TOKEN = readTrimmedEnv("TELEGRAM_BOT_TOKEN");
   const TELEGRAM_CHAT_ID = readTrimmedEnv("TELEGRAM_CHAT_ID");
   const TELEGRAM_MESSAGE_THREAD_ID = validateOptionalIntegerEnv(
@@ -187,6 +260,34 @@ function loadServerEnv(): ServerEnv {
         "TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID must be provided together or left empty together.",
       ),
     );
+  }
+
+  const smtpFieldsProvided = [
+    Boolean(ALERT_EMAIL_TO?.length),
+    Boolean(ALERT_EMAIL_FROM),
+    Boolean(SMTP_HOST),
+    SMTP_PORT !== undefined,
+    SMTP_SECURE !== undefined,
+    Boolean(SMTP_USER),
+    Boolean(SMTP_PASSWORD),
+  ].some(Boolean);
+
+  if (smtpFieldsProvided) {
+    if (!ALERT_EMAIL_TO?.length || !ALERT_EMAIL_FROM || !SMTP_HOST) {
+      throw new Error(
+        formatEnvError(
+          "ALERT_EMAIL_TO, ALERT_EMAIL_FROM, and SMTP_HOST must be provided together to enable email alerts.",
+        ),
+      );
+    }
+
+    if (Boolean(SMTP_USER) !== Boolean(SMTP_PASSWORD)) {
+      throw new Error(
+        formatEnvError(
+          "SMTP_USER and SMTP_PASSWORD must be provided together or left empty together.",
+        ),
+      );
+    }
   }
 
   if (Boolean(YANDEX_TRANSLATE_API_KEY) !== Boolean(YANDEX_TRANSLATE_FOLDER_ID)) {
@@ -223,6 +324,13 @@ function loadServerEnv(): ServerEnv {
     DATABASE_URL,
     BILLING_MODE,
     SITE_URL,
+    ALERT_EMAIL_TO,
+    ALERT_EMAIL_FROM,
+    SMTP_HOST,
+    SMTP_PORT: SMTP_HOST ? (SMTP_PORT ?? 25) : undefined,
+    SMTP_SECURE: SMTP_HOST ? (SMTP_SECURE ?? (SMTP_PORT === 465)) : undefined,
+    SMTP_USER,
+    SMTP_PASSWORD,
     TELEGRAM_BOT_TOKEN,
     TELEGRAM_CHAT_ID,
     TELEGRAM_MESSAGE_THREAD_ID,

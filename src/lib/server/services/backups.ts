@@ -32,7 +32,7 @@ import { nowIso } from "@/lib/server/utils";
 
 import { logAdmin } from "./shared";
 import { getAdminSettingsRecord } from "./site-settings";
-import { sendTelegramAlert } from "./telegram";
+import { sendAlertDelivery } from "./alert-delivery";
 
 const BACKUP_STATUS_KEY = "backup_status";
 const BACKUPS_DIR = path.join(process.cwd(), "data", "backups");
@@ -290,20 +290,16 @@ export async function runBackupNow(params?: {
         });
       });
 
-      try {
-        await sendTelegramAlert({
-          category: "error",
-          title: "Ошибка создания backup",
-          lines: [
-            `trigger: ${trigger}`,
-            `message: ${status.lastErrorMessage}`,
-          ],
-          dedupeKey: `backup:${trigger}:failure`,
-          minIntervalMs: 300_000,
-        });
-      } catch (notificationError) {
-        console.error("[telegram-alert]", notificationError);
-      }
+      await sendAlertDelivery({
+        category: "error",
+        title: "Ошибка создания backup",
+        lines: [
+          `trigger: ${trigger}`,
+          `message: ${status.lastErrorMessage}`,
+        ],
+        dedupeKey: `backup:${trigger}:failure`,
+        minIntervalMs: 300_000,
+      });
     }
 
     throw error;
