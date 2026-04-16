@@ -44,6 +44,10 @@ next-env.d.ts
 
 # release artifacts
 release/packages/*.zip
+/releases/
+/nvltrnslt-server-*.zip
+SERVER_UPLOAD_NOTES.txt
+server-bundle-manifest.json
 
 # local temp and desktop metadata
 /.tmp/
