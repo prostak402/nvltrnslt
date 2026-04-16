@@ -4,6 +4,8 @@ import { useState } from "react";
 import Link from "next/link";
 import { Menu, X } from "lucide-react";
 
+import type { SessionSummary } from "@/lib/contracts/session";
+
 const navLinks = [
   { label: "Как это работает", href: "/#how-it-works" },
   { label: "Тарифы", href: "/#pricing" },
@@ -11,8 +13,22 @@ const navLinks = [
   { label: "Скачать мод", href: "/#download" },
 ];
 
-export function Header() {
+type HeaderProps = {
+  session: SessionSummary;
+};
+
+export function Header({ session }: HeaderProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const ctaHref = session.user
+    ? session.user.role === "admin"
+      ? "/admin"
+      : "/dashboard"
+    : "/auth/login";
+  const ctaLabel = session.user
+    ? session.user.role === "admin"
+      ? "Админка"
+      : "Личный кабинет"
+    : "Войти";
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-lg border-b border-border">
@@ -39,10 +55,10 @@ export function Header() {
           {/* Desktop CTA */}
           <div className="hidden md:flex items-center">
             <Link
-              href="/auth/login"
+              href={ctaHref}
               className="px-4 py-2 text-sm font-medium border border-border rounded-lg text-foreground hover:border-border-hover hover:bg-background-hover transition-colors duration-200"
             >
-              Войти
+              {ctaLabel}
             </Link>
           </div>
 
@@ -72,11 +88,11 @@ export function Header() {
               </Link>
             ))}
             <Link
-              href="/auth/login"
+              href={ctaHref}
               onClick={() => setMobileOpen(false)}
               className="block text-center px-4 py-2 text-sm font-medium border border-border rounded-lg text-foreground hover:border-border-hover hover:bg-background-hover transition-colors duration-200"
             >
-              Войти
+              {ctaLabel}
             </Link>
           </div>
         </div>
