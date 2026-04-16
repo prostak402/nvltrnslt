@@ -1,268 +1,219 @@
 import {
-  BookOpen,
-  MessageSquare,
-  Sparkles,
-  CheckCircle,
-  AlertTriangle,
-  Activity,
-  Save,
-  RotateCcw,
   ArrowRight,
+  Activity,
+  AlertTriangle,
   BookMarked,
+  BookOpen,
   Brain,
-  KeyRound,
-  Download,
+  CheckCircle,
   Clock,
+  Download,
+  KeyRound,
+  MessageSquare,
+  RotateCcw,
+  Save,
+  Sparkles,
 } from "lucide-react";
-import { Card } from "@/components/ui/Card";
+
 import { Badge } from "@/components/ui/Badge";
-import { StatCard } from "@/components/ui/StatCard";
 import { Button } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
+import { StatCard } from "@/components/ui/StatCard";
+import { planLabel, studyStatusMeta } from "@/lib/client/presentation";
+import type { DashboardOverviewResponse } from "@/lib/contracts/dashboard";
+import { requireDashboardPageUser } from "@/lib/server/page-auth";
+import { getDashboardOverview } from "@/lib/server/services/study";
 
-const recentWords = [
-  { word: "Inevitable", translation: "Неизбежный", novel: "Steins;Gate", date: "Сегодня", status: "новое" as const },
-  { word: "Reluctant", translation: "Неохотный", novel: "Fate/Stay Night", date: "Сегодня", status: "сложное" as const },
-  { word: "Consciousness", translation: "Сознание", novel: "Ever17", date: "Вчера", status: "выучено" as const },
-  { word: "Contradiction", translation: "Противоречие", novel: "Umineko", date: "Вчера", status: "новое" as const },
-  { word: "Perceive", translation: "Воспринимать", novel: "Clannad", date: "2 дня назад", status: "сложное" as const },
-];
+export default async function DashboardPage() {
+  const user = await requireDashboardPageUser();
+  const data: DashboardOverviewResponse = await getDashboardOverview(user.id);
+  const weeklyMax =
+    data.weeklyActivity.reduce((max, day) => Math.max(max, day.saved, day.reviewed), 0) || 1;
 
-const recentPhrases = [
-  {
-    original: "The weight of myستقبل sins is not something I can simply cast aside.",
-    correctedOriginal: "The weight of my sins is not something I can simply cast aside.",
-    translation: "Тяжесть моих грехов — это не то, что я могу просто отбросить.",
-    novel: "Fate/Stay Night",
-  },
-  {
-    original: "No matter how many times I repeat this moment, the outcome never changes.",
-    translation: "Сколько бы раз я ни повторял этот момент, результат никогда не меняется.",
-    novel: "Steins;Gate",
-  },
-  {
-    original: "Perhaps the truth we seek is hidden in plain sight.",
-    translation: "Возможно, истина, которую мы ищем, скрыта на виду.",
-    novel: "Umineko",
-  },
-];
-
-const weeklyActivity = [
-  { day: "Пн", value: 65 },
-  { day: "Вт", value: 40 },
-  { day: "Ср", value: 85 },
-  { day: "Чт", value: 55 },
-  { day: "Пт", value: 70 },
-  { day: "Сб", value: 30 },
-  { day: "Вс", value: 90 },
-];
-
-const statusBadgeVariant = {
-  "новое": "accent",
-  "сложное": "warning",
-  "выучено": "success",
-} as const;
-
-export default function DashboardPage() {
   return (
-    <div className="space-y-6 max-w-7xl mx-auto">
-      {/* Welcome bar */}
-      <Card className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div className="mx-auto max-w-7xl space-y-6">
+      <Card className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-full bg-accent-light flex items-center justify-center">
-            <Sparkles className="w-6 h-6 text-accent" />
+          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-accent-light">
+            <Sparkles className="h-6 w-6 text-accent" />
           </div>
           <div>
-            <h1 className="text-xl font-bold text-foreground">Привет, Алексей!</h1>
-            <p className="text-sm text-foreground-muted">Продолжай в том же духе</p>
+            <h1 className="text-xl font-bold text-foreground">Привет, {data.user.name}!</h1>
+            <p className="text-sm text-foreground-muted">
+              Сайт и мод теперь работают через единый словарь и sync-контур.
+            </p>
           </div>
         </div>
-        <div className="flex items-center gap-3 flex-wrap">
-          <Badge variant="accent">Бесплатный план</Badge>
+        <div className="flex flex-wrap items-center gap-3">
+          <Badge variant="accent">{planLabel(data.user.plan)} план</Badge>
           <span className="text-sm text-foreground-secondary">
-            Сегодня: <span className="text-foreground font-medium">18</span> из <span className="text-foreground font-medium">50</span> переводов
+            Сегодня: <span className="font-medium text-foreground">{data.summary.translationsToday}</span> из{" "}
+            <span className="font-medium text-foreground">{data.summary.translationsLimit ?? "∞"}</span>{" "}
+            переводов
           </span>
         </div>
       </Card>
 
-      {/* Quick stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
-        <StatCard
-          icon={BookOpen}
-          label="Слов сохранено"
-          value={247}
-          change={{ value: "+12%", positive: true }}
-        />
-        <StatCard
-          icon={MessageSquare}
-          label="Фраз сохранено"
-          value={38}
-          change={{ value: "+8%", positive: true }}
-        />
-        <StatCard
-          icon={Sparkles}
-          label="Новых сегодня"
-          value={12}
-          change={{ value: "+3", positive: true }}
-        />
-        <StatCard
-          icon={CheckCircle}
-          label="Выучено"
-          value={89}
-          change={{ value: "+5%", positive: true }}
-        />
-        <StatCard
-          icon={AlertTriangle}
-          label="Сложных"
-          value={34}
-          change={{ value: "-2", positive: true }}
-        />
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+        <StatCard icon={BookOpen} label="Слов сохранено" value={data.summary.wordsCount} />
+        <StatCard icon={MessageSquare} label="Фраз сохранено" value={data.summary.phrasesCount} />
+        <StatCard icon={Sparkles} label="Новых карточек" value={data.summary.newCount} />
+        <StatCard icon={CheckCircle} label="Выучено" value={data.summary.learnedCount} />
+        <StatCard icon={AlertTriangle} label="Сложных" value={data.summary.hardCount} />
       </div>
 
-      {/* Today's activity + Quick actions */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Today's activity */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <Card>
-          <h2 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
-            <Activity className="w-5 h-5 text-accent" />
+          <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold text-foreground">
+            <Activity className="h-5 w-5 text-accent" />
             Активность за сегодня
           </h2>
           <div className="grid grid-cols-3 gap-4">
-            <div className="text-center p-4 rounded-lg bg-background-hover">
-              <p className="text-2xl font-bold text-foreground">18</p>
-              <p className="text-xs text-foreground-muted mt-1">Переводов</p>
+            <div className="rounded-lg bg-background-hover p-4 text-center">
+              <p className="text-2xl font-bold text-foreground">{data.summary.translationsToday}</p>
+              <p className="mt-1 text-xs text-foreground-muted">Переводов</p>
             </div>
-            <div className="text-center p-4 rounded-lg bg-background-hover">
-              <div className="flex items-center justify-center gap-1">
-                <Save className="w-4 h-4 text-accent-secondary" />
-              </div>
-              <p className="text-2xl font-bold text-foreground">7</p>
-              <p className="text-xs text-foreground-muted mt-1">Сохранений</p>
+            <div className="rounded-lg bg-background-hover p-4 text-center">
+              <Save className="mx-auto h-4 w-4 text-accent-secondary" />
+              <p className="text-2xl font-bold text-foreground">{data.summary.savesToday}</p>
+              <p className="mt-1 text-xs text-foreground-muted">Сохранений</p>
             </div>
-            <div className="text-center p-4 rounded-lg bg-background-hover">
-              <div className="flex items-center justify-center gap-1">
-                <RotateCcw className="w-4 h-4 text-success" />
-              </div>
-              <p className="text-2xl font-bold text-foreground">15</p>
-              <p className="text-xs text-foreground-muted mt-1">Повторений</p>
+            <div className="rounded-lg bg-background-hover p-4 text-center">
+              <RotateCcw className="mx-auto h-4 w-4 text-success" />
+              <p className="text-2xl font-bold text-foreground">{data.summary.reviewsToday}</p>
+              <p className="mt-1 text-xs text-foreground-muted">Повторений</p>
             </div>
           </div>
         </Card>
 
-        {/* Quick actions */}
         <Card>
-          <h2 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
-            <ArrowRight className="w-5 h-5 text-accent" />
+          <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold text-foreground">
+            <ArrowRight className="h-5 w-5 text-accent" />
             Быстрые действия
           </h2>
           <div className="grid grid-cols-2 gap-3">
             <Button variant="secondary" size="lg" href="/dashboard/words" className="flex items-center gap-2 !justify-start">
-              <BookMarked className="w-5 h-5 text-accent" />
+              <BookMarked className="h-5 w-5 text-accent" />
               Открыть словарь
             </Button>
-            <Button variant="secondary" size="lg" href="/dashboard/review" className="flex items-center gap-2 !justify-start">
-              <Brain className="w-5 h-5 text-accent-secondary" />
+            <Button variant="secondary" size="lg" href="/dashboard/learning" className="flex items-center gap-2 !justify-start">
+              <Brain className="h-5 w-5 text-accent-secondary" />
               Начать повторение
             </Button>
-            <Button variant="secondary" size="lg" href="/dashboard/access" className="flex items-center gap-2 !justify-start">
-              <KeyRound className="w-5 h-5 text-warning" />
-              Получить код доступа
+            <Button variant="secondary" size="lg" href="/dashboard/devices" className="flex items-center gap-2 !justify-start">
+              <KeyRound className="h-5 w-5 text-warning" />
+              Скачать ключ-файл
             </Button>
             <Button variant="secondary" size="lg" href="/download" className="flex items-center gap-2 !justify-start">
-              <Download className="w-5 h-5 text-success" />
+              <Download className="h-5 w-5 text-success" />
               Скачать мод
             </Button>
           </div>
         </Card>
       </div>
 
-      {/* Recent words */}
       <Card>
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
-            <BookOpen className="w-5 h-5 text-accent" />
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="flex items-center gap-2 text-lg font-semibold text-foreground">
+            <BookOpen className="h-5 w-5 text-accent" />
             Последние слова
           </h2>
           <Button variant="ghost" size="sm" href="/dashboard/words">
-            Все слова <ArrowRight className="w-4 h-4 ml-1" />
+            Все слова <ArrowRight className="ml-1 h-4 w-4" />
           </Button>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border text-foreground-muted">
-                <th className="text-left py-3 px-2 font-medium">Слово</th>
-                <th className="text-left py-3 px-2 font-medium">Перевод</th>
-                <th className="text-left py-3 px-2 font-medium hidden sm:table-cell">Новелла</th>
-                <th className="text-left py-3 px-2 font-medium hidden md:table-cell">Дата</th>
-                <th className="text-left py-3 px-2 font-medium">Статус</th>
+                <th className="px-2 py-3 text-left font-medium">Слово</th>
+                <th className="px-2 py-3 text-left font-medium">Перевод</th>
+                <th className="hidden px-2 py-3 text-left font-medium sm:table-cell">Новелла</th>
+                <th className="hidden px-2 py-3 text-left font-medium md:table-cell">Когда</th>
+                <th className="px-2 py-3 text-left font-medium">Статус</th>
               </tr>
             </thead>
             <tbody>
-              {recentWords.map((w) => (
-                <tr key={w.word} className="border-b border-border/50 hover:bg-background-hover transition-colors">
-                  <td className="py-3 px-2 font-medium text-foreground">{w.word}</td>
-                  <td className="py-3 px-2 text-foreground-secondary">{w.translation}</td>
-                  <td className="py-3 px-2 text-foreground-muted hidden sm:table-cell">{w.novel}</td>
-                  <td className="py-3 px-2 text-foreground-muted hidden md:table-cell">
+              {data.recentWords.map((word) => (
+                <tr key={word.id} className="border-b border-border/50 transition-colors hover:bg-background-hover">
+                  <td className="px-2 py-3 font-medium text-foreground">{word.word}</td>
+                  <td className="px-2 py-3 text-foreground-secondary">{word.translation}</td>
+                  <td className="hidden px-2 py-3 text-foreground-muted sm:table-cell">{word.novel}</td>
+                  <td className="hidden px-2 py-3 text-foreground-muted md:table-cell">
                     <span className="flex items-center gap-1">
-                      <Clock className="w-3.5 h-3.5" />
-                      {w.date}
+                      <Clock className="h-3.5 w-3.5" />
+                      {word.relativeDate}
                     </span>
                   </td>
-                  <td className="py-3 px-2">
-                    <Badge variant={statusBadgeVariant[w.status]}>{w.status}</Badge>
+                  <td className="px-2 py-3">
+                    <Badge variant={studyStatusMeta[word.status].variant}>{studyStatusMeta[word.status].label}</Badge>
                   </td>
                 </tr>
               ))}
+              {data.recentWords.length === 0 ? (
+                <tr>
+                  <td className="px-2 py-4 text-foreground-muted" colSpan={5}>
+                    Пока нет сохранённых слов. После первой синхронизации из мода они появятся здесь.
+                  </td>
+                </tr>
+              ) : null}
             </tbody>
           </table>
         </div>
       </Card>
 
-      {/* Recent phrases + Weekly chart */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Recent phrases */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <Card>
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
-              <MessageSquare className="w-5 h-5 text-accent" />
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="flex items-center gap-2 text-lg font-semibold text-foreground">
+              <MessageSquare className="h-5 w-5 text-accent" />
               Последние фразы
             </h2>
             <Button variant="ghost" size="sm" href="/dashboard/phrases">
-              Все фразы <ArrowRight className="w-4 h-4 ml-1" />
+              Все фразы <ArrowRight className="ml-1 h-4 w-4" />
             </Button>
           </div>
           <div className="space-y-4">
-            {recentPhrases.map((p, i) => (
-              <div key={i} className="p-3 rounded-lg bg-background-hover space-y-2">
-                <p className="text-sm text-foreground leading-relaxed">
-                  &ldquo;{p.correctedOriginal ?? p.original}&rdquo;
-                </p>
-                <p className="text-sm text-foreground-secondary leading-relaxed">
-                  &ldquo;{p.translation}&rdquo;
-                </p>
-                <p className="text-xs text-foreground-muted">{p.novel}</p>
+            {data.recentPhrases.map((phrase) => (
+              <div key={phrase.id} className="space-y-2 rounded-lg bg-background-hover p-3">
+                <p className="text-sm leading-relaxed text-foreground">&ldquo;{phrase.phrase}&rdquo;</p>
+                <p className="text-sm leading-relaxed text-foreground-secondary">&ldquo;{phrase.translation}&rdquo;</p>
+                <p className="text-xs text-foreground-muted">{phrase.novel}</p>
               </div>
             ))}
+            {data.recentPhrases.length === 0 ? (
+              <p className="text-sm text-foreground-muted">Фразы появятся после первых сохранений из мода.</p>
+            ) : null}
           </div>
         </Card>
 
-        {/* Weekly activity chart */}
         <Card>
-          <h2 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
-            <Activity className="w-5 h-5 text-accent" />
+          <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold text-foreground">
+            <Activity className="h-5 w-5 text-accent" />
             Активность за неделю
           </h2>
-          <div className="flex items-end justify-between gap-2 h-48 px-2">
-            {weeklyActivity.map((d) => (
-              <div key={d.day} className="flex-1 flex flex-col items-center gap-2">
-                <div className="w-full relative flex items-end justify-center" style={{ height: "160px" }}>
+          <div className="mb-4 flex items-center gap-4 text-sm">
+            <span className="flex items-center gap-2">
+              <span className="h-3 w-3 rounded bg-accent" /> Сохранено
+            </span>
+            <span className="flex items-center gap-2">
+              <span className="h-3 w-3 rounded bg-accent-secondary" /> Повторено
+            </span>
+          </div>
+          <div className="flex h-48 items-end justify-between gap-2 px-2">
+            {data.weeklyActivity.map((day) => (
+              <div key={day.day} className="flex flex-1 flex-col items-center gap-2">
+                <div className="relative flex h-[160px] w-full items-end justify-center gap-1">
                   <div
-                    className="w-full max-w-[40px] rounded-t-md bg-accent/80 hover:bg-accent transition-colors"
-                    style={{ height: `${d.value}%` }}
+                    className="w-full max-w-[18px] rounded-t-md bg-accent/80"
+                    style={{ height: `${(day.saved / weeklyMax) * 100}%` }}
+                  />
+                  <div
+                    className="w-full max-w-[18px] rounded-t-md bg-accent-secondary/80"
+                    style={{ height: `${(day.reviewed / weeklyMax) * 100}%` }}
                   />
                 </div>
-                <span className="text-xs text-foreground-muted">{d.day}</span>
+                <span className="text-xs text-foreground-muted">{day.day}</span>
               </div>
             ))}
           </div>

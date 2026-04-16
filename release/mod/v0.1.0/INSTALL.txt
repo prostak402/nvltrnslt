@@ -1,0 +1,34 @@
+NVLingo Ren'Py Mod v0.1.0
+
+Package contents:
+- 00_lexmod_FIXED.rpy
+- INSTALL.txt
+- RELEASE_NOTES.txt
+- manifest.json
+
+Supported target:
+- Ren'Py 7.x and 8.x desktop builds on Windows, Linux, and macOS
+
+Install:
+1. Open the folder of your Ren'Py game.
+2. Open the `game` subfolder.
+3. Copy `00_lexmod_FIXED.rpy` into `game`.
+4. Restart the game.
+
+Connect the mod to your account:
+1. Sign in to NVLingo on the website.
+2. Open the dashboard and download `nvl_translate_key.json`.
+3. Copy `nvl_translate_key.json` into the same `game` folder.
+4. Restart the game again.
+5. If activation does not happen automatically, press `F6` inside the game and run activation from file.
+
+Useful hotkeys:
+- F6: open the mod window and sync settings
+- F7: start phrase collection mode
+- F8: enable or disable the mod
+- F9: open collected words and phrases
+
+Notes:
+- Translation and sync require the NVLingo website and server API.
+- Translation and dictionary limits depend on your account plan.
+- If the network is unavailable, already saved local data stays in the game and can sync later.

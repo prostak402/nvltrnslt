@@ -20,7 +20,7 @@ export function Header() {
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
           <Link href="/" className="flex items-center gap-2 font-bold text-lg text-foreground">
-            <span className="text-accent">NVL</span> Translate
+            <span className="text-accent">NV</span> Lingo
           </Link>
 
           {/* Desktop nav */}

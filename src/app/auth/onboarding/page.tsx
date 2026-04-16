@@ -3,49 +3,69 @@
 import { useState } from "react";
 import Link from "next/link";
 import {
-  Languages,
-  BookOpen,
-  Download,
-  KeyRound,
-  Gamepad2,
-  Brain,
-  BarChart3,
-  Copy,
-  Check,
-  ArrowRight,
   ArrowLeft,
+  ArrowRight,
+  BarChart3,
+  BookOpen,
+  Brain,
+  Download,
+  FileKey2,
+  FolderOpen,
+  Gamepad2,
+  Languages,
 } from "lucide-react";
 
+import { useApiData } from "@/lib/client/api";
+import {
+  ACTIVATION_KEY_FILE,
+  MAX_ACTIVE_DEVICES,
+  MOD_DOWNLOAD_PATH,
+} from "@/lib/config";
+import {
+  activationFallbackSummary,
+  activationFilePlacementSummary,
+  activationFlowSummary,
+  deviceLimitSummary,
+  firstSyncSummary,
+  modDesktopSupportSummary,
+  modInstallationSummary,
+} from "@/lib/product";
+
 const STEPS = 3;
-const FAKE_CODE = "NVL-7K2F-9XAM";
+
+type DevicesResponse = {
+  activationKeyPreview: string;
+  activationFileName: string;
+  activationFilePath: string;
+  devices: Array<{ id: number; name: string }>;
+  maxDevices: number;
+  activeDevices: number;
+};
 
 function StepIndicator({ current }: { current: number }) {
   return (
-    <div className="flex items-center justify-center gap-3 mb-8">
-      {Array.from({ length: STEPS }, (_, i) => {
-        const step = i + 1;
+    <div className="mb-8 flex items-center justify-center gap-3">
+      {Array.from({ length: STEPS }, (_, index) => {
+        const step = index + 1;
         const isActive = step === current;
         const isDone = step < current;
+
         return (
           <div key={step} className="flex items-center gap-3">
             <div
-              className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold transition ${
+              className={`flex h-9 w-9 items-center justify-center rounded-full text-sm font-semibold transition ${
                 isActive
                   ? "bg-accent text-white"
                   : isDone
                     ? "bg-accent/20 text-accent"
-                    : "bg-background-secondary text-foreground-muted border border-border"
+                    : "border border-border bg-background-secondary text-foreground-muted"
               }`}
             >
-              {isDone ? <Check className="w-4 h-4" /> : step}
+              {step}
             </div>
-            {step < STEPS && (
-              <div
-                className={`w-10 h-0.5 ${
-                  isDone ? "bg-accent/40" : "bg-border"
-                }`}
-              />
-            )}
+            {step < STEPS ? (
+              <div className={`h-0.5 w-10 ${isDone ? "bg-accent/40" : "bg-border"}`} />
+            ) : null}
           </div>
         );
       })}
@@ -55,52 +75,50 @@ function StepIndicator({ current }: { current: number }) {
 
 function StepWelcome() {
   return (
-    <div className="text-center space-y-6">
-      <h2 className="text-2xl font-bold text-foreground">
-        Добро пожаловать!
-      </h2>
-      <p className="text-foreground-secondary leading-relaxed">
-        NVL Translate помогает учить английский через визуальные новеллы. Вот как
-        это работает:
+    <div className="space-y-6 text-center">
+      <h2 className="text-2xl font-bold text-foreground">Добро пожаловать!</h2>
+      <p className="leading-relaxed text-foreground-secondary">
+        NVLingo помогает читать визуальные новеллы на английском,
+        переводить текст через серверный proxy и сразу собирать собственный
+        словарь для обучения.
       </p>
 
       <div className="grid gap-4 text-left">
-        <div className="flex items-start gap-4 p-4 bg-background-secondary rounded-xl border border-border">
-          <div className="p-2 bg-accent-light rounded-lg shrink-0">
-            <Gamepad2 className="w-5 h-5 text-accent" />
+        <div className="flex items-start gap-4 rounded-xl border border-border bg-background-secondary p-4">
+          <div className="shrink-0 rounded-lg bg-accent-light p-2">
+            <Gamepad2 className="h-5 w-5 text-accent" />
           </div>
           <div>
-            <p className="font-medium text-foreground">Играйте с модом</p>
-            <p className="text-sm text-foreground-muted mt-0.5">
-              Мод автоматически определяет незнакомые слова в диалогах и
-              показывает перевод
+            <p className="font-medium text-foreground">Читайте прямо в игре</p>
+            <p className="mt-0.5 text-sm text-foreground-muted">
+              Мод живёт в папке game/ и переводит текст через ваш backend на
+              Yandex Cloud.
             </p>
           </div>
         </div>
 
-        <div className="flex items-start gap-4 p-4 bg-background-secondary rounded-xl border border-border">
-          <div className="p-2 bg-accent-light rounded-lg shrink-0">
-            <Brain className="w-5 h-5 text-accent" />
+        <div className="flex items-start gap-4 rounded-xl border border-border bg-background-secondary p-4">
+          <div className="shrink-0 rounded-lg bg-accent-light p-2">
+            <Brain className="h-5 w-5 text-accent" />
           </div>
           <div>
-            <p className="font-medium text-foreground">Запоминайте слова</p>
-            <p className="text-sm text-foreground-muted mt-0.5">
-              Все встреченные слова сохраняются в ваш личный словарь для
-              повторения
+            <p className="font-medium text-foreground">Сохраняйте словарь</p>
+            <p className="mt-0.5 text-sm text-foreground-muted">
+              Все отмеченные слова, фразы и контекст синхронизируются с сайтом и
+              попадают в обучение.
             </p>
           </div>
         </div>
 
-        <div className="flex items-start gap-4 p-4 bg-background-secondary rounded-xl border border-border">
-          <div className="p-2 bg-accent-light rounded-lg shrink-0">
-            <BarChart3 className="w-5 h-5 text-accent" />
+        <div className="flex items-start gap-4 rounded-xl border border-border bg-background-secondary p-4">
+          <div className="shrink-0 rounded-lg bg-accent-light p-2">
+            <BarChart3 className="h-5 w-5 text-accent" />
           </div>
           <div>
-            <p className="font-medium text-foreground">
-              Отслеживайте прогресс
-            </p>
-            <p className="text-sm text-foreground-muted mt-0.5">
-              На сайте доступна статистика, тренировки и отслеживание прогресса
+            <p className="font-medium text-foreground">Следите за прогрессом</p>
+            <p className="mt-0.5 text-sm text-foreground-muted">
+              В кабинете доступны карточки, история, статистика и управление
+              устройствами. {deviceLimitSummary()}
             </p>
           </div>
         </div>
@@ -111,85 +129,102 @@ function StepWelcome() {
 
 function StepDownload() {
   return (
-    <div className="text-center space-y-6">
-      <h2 className="text-2xl font-bold text-foreground">Скачать мод</h2>
-      <p className="text-foreground-secondary leading-relaxed">
-        Установите мод для Ren&apos;Py, чтобы начать учить слова прямо во время
-        игры.
+    <div className="space-y-6 text-center">
+      <h2 className="text-2xl font-bold text-foreground">Скачайте мод</h2>
+      <p className="leading-relaxed text-foreground-secondary">
+        {modInstallationSummary()} {modDesktopSupportSummary()} На следующем шаге вы скачаете файл активации
+        для этой же папки.
       </p>
 
-      <button
-        type="button"
-        className="inline-flex items-center gap-2 px-6 py-3 bg-accent hover:bg-accent-hover text-white font-medium rounded-lg transition cursor-pointer"
+      <Link
+        href={MOD_DOWNLOAD_PATH}
+        prefetch={false}
+        className="inline-flex cursor-pointer items-center gap-2 rounded-lg bg-accent px-6 py-3 font-medium text-white transition hover:bg-accent-hover"
       >
-        <Download className="w-5 h-5" />
-        Скачать NVL Translate Mod
-      </button>
+        <Download className="h-5 w-5" />
+        Скачать desktop-архив
+      </Link>
 
-      <div className="text-left space-y-3 p-4 bg-background-secondary rounded-xl border border-border">
-        <p className="font-medium text-foreground flex items-center gap-2">
-          <BookOpen className="w-4 h-4 text-accent" />
+      <div className="space-y-3 rounded-xl border border-border bg-background-secondary p-4 text-left">
+        <p className="flex items-center gap-2 font-medium text-foreground">
+          <BookOpen className="h-4 w-4 text-accent" />
           Инструкция по установке
         </p>
-        <ol className="text-sm text-foreground-secondary space-y-2 list-decimal list-inside">
-          <li>Скачайте архив с модом</li>
+        <ol className="list-inside list-decimal space-y-2 text-sm text-foreground-secondary">
+          <li>Скачайте архив с модом.</li>
           <li>
-            Распакуйте содержимое в папку <code className="text-accent-secondary bg-background px-1.5 py-0.5 rounded text-xs">game/</code> вашей
-            визуальной новеллы
+            Распакуйте содержимое в папку{" "}
+            <code className="rounded bg-background px-1.5 py-0.5 text-xs text-accent-secondary">
+              game/
+            </code>{" "}
+            вашей визуальной новеллы.
           </li>
-          <li>Запустите игру — мод активируется автоматически</li>
-          <li>Введите код доступа при первом запуске (следующий шаг)</li>
+          <li>Перезапустите игру после копирования файлов.</li>
+          <li>На следующем шаге скачайте файл активации и положите его туда же.</li>
         </ol>
       </div>
     </div>
   );
 }
 
-function StepAccessCode() {
-  const [copied, setCopied] = useState(false);
-
-  function handleCopy() {
-    navigator.clipboard.writeText(FAKE_CODE);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  }
-
+function StepActivationFile({
+  activationKeyPreview,
+  activationFileName,
+  activationFilePath,
+  activeDevices,
+  maxDevices,
+}: {
+  activationKeyPreview: string;
+  activationFileName: string;
+  activationFilePath: string;
+  activeDevices: number;
+  maxDevices: number;
+}) {
   return (
-    <div className="text-center space-y-6">
-      <h2 className="text-2xl font-bold text-foreground">Код доступа</h2>
-      <p className="text-foreground-secondary leading-relaxed">
-        Введите этот код в моде при первом запуске игры, чтобы связать аккаунт.
+    <div className="space-y-6 text-center">
+      <h2 className="text-2xl font-bold text-foreground">Файл активации</h2>
+      <p className="leading-relaxed text-foreground-secondary">
+        {activationFlowSummary()} Ручной ввод кода больше не нужен.
       </p>
 
-      <div className="flex items-center justify-center gap-3">
-        <div className="px-6 py-4 bg-background-secondary border border-border rounded-xl">
-          <span className="text-2xl font-mono font-bold tracking-widest text-accent">
-            {FAKE_CODE}
-          </span>
+      <div className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-3">
+        <div className="rounded-lg border border-border bg-background-secondary px-4 py-3">
+          <p className="text-foreground-muted">Ключ аккаунта</p>
+          <p className="mt-1 font-mono font-semibold text-foreground">
+            {activationKeyPreview}
+          </p>
         </div>
-        <button
-          type="button"
-          onClick={handleCopy}
-          className="p-3 bg-background-secondary border border-border hover:border-border-hover rounded-xl transition cursor-pointer"
-          title="Скопировать"
-        >
-          {copied ? (
-            <Check className="w-5 h-5 text-success" />
-          ) : (
-            <Copy className="w-5 h-5 text-foreground-muted" />
-          )}
-        </button>
+        <div className="rounded-lg border border-border bg-background-secondary px-4 py-3">
+          <p className="text-foreground-muted">Файл</p>
+          <p className="mt-1 font-semibold text-foreground">{activationFileName}</p>
+        </div>
+        <div className="rounded-lg border border-border bg-background-secondary px-4 py-3">
+          <p className="text-foreground-muted">Устройства</p>
+          <p className="mt-1 font-semibold text-foreground">
+            {activeDevices} / {maxDevices}
+          </p>
+        </div>
       </div>
 
-      <div className="p-4 bg-background-secondary rounded-xl border border-border text-left">
-        <p className="font-medium text-foreground flex items-center gap-2">
-          <KeyRound className="w-4 h-4 text-accent" />
-          Как использовать код
+      <a
+        href={activationFilePath}
+        className="inline-flex items-center gap-2 rounded-lg bg-accent px-4 py-2.5 text-sm font-medium text-white transition hover:bg-accent-hover"
+      >
+        <FileKey2 className="h-4 w-4" />
+        Скачать файл активации
+      </a>
+
+      <div className="rounded-xl border border-border bg-background-secondary p-4 text-left">
+        <p className="flex items-center gap-2 font-medium text-foreground">
+          <FolderOpen className="h-4 w-4 text-accent" />
+          Что делать дальше
         </p>
-        <ol className="mt-2 text-sm text-foreground-secondary space-y-1.5 list-decimal list-inside">
-          <li>Запустите игру с установленным модом</li>
-          <li>В меню мода выберите «Привязать аккаунт»</li>
-          <li>Введите код выше и нажмите «Подтвердить»</li>
+        <ol className="mt-2 list-inside list-decimal space-y-1.5 text-sm text-foreground-secondary">
+          <li>{activationFilePlacementSummary()}</li>
+          <li>Запустите игру и при необходимости откройте окно мода через F6.</li>
+          <li>{activationFallbackSummary()}</li>
+          <li>{firstSyncSummary()}</li>
+          <li>{deviceLimitSummary()}</li>
         </ol>
       </div>
     </div>
@@ -198,34 +233,45 @@ function StepAccessCode() {
 
 export default function OnboardingPage() {
   const [step, setStep] = useState(1);
+  const { data } = useApiData<DevicesResponse>("/api/dashboard/devices", {
+    activationKeyPreview: "—",
+    activationFileName: ACTIVATION_KEY_FILE,
+    activationFilePath: "/api/dashboard/activation-file",
+    devices: [],
+    maxDevices: MAX_ACTIVE_DEVICES,
+    activeDevices: 0,
+  });
 
   return (
     <div className="w-full max-w-lg">
-      <div className="bg-background-card border border-border rounded-2xl p-8 shadow-lg">
-        {/* Logo */}
-        <div className="flex items-center justify-center gap-2 mb-6">
-          <Languages className="w-7 h-7 text-accent" />
-          <span className="text-xl font-bold text-foreground">
-            NVL Translate
-          </span>
+      <div className="rounded-2xl border border-border bg-background-card p-8 shadow-lg">
+        <div className="mb-6 flex items-center justify-center gap-2">
+          <Languages className="h-7 w-7 text-accent" />
+          <span className="text-xl font-bold text-foreground">NVLingo</span>
         </div>
 
         <StepIndicator current={step} />
 
-        {/* Step content */}
-        {step === 1 && <StepWelcome />}
-        {step === 2 && <StepDownload />}
-        {step === 3 && <StepAccessCode />}
+        {step === 1 ? <StepWelcome /> : null}
+        {step === 2 ? <StepDownload /> : null}
+        {step === 3 ? (
+          <StepActivationFile
+            activationKeyPreview={data.activationKeyPreview}
+            activationFileName={data.activationFileName}
+            activationFilePath={data.activationFilePath}
+            activeDevices={data.activeDevices}
+            maxDevices={data.maxDevices}
+          />
+        ) : null}
 
-        {/* Navigation */}
         <div className="mt-8 flex items-center justify-between gap-4">
           {step > 1 ? (
             <button
               type="button"
               onClick={() => setStep(step - 1)}
-              className="flex items-center gap-1 px-4 py-2.5 text-foreground-secondary hover:text-foreground transition cursor-pointer"
+              className="flex cursor-pointer items-center gap-1 px-4 py-2.5 text-foreground-secondary transition hover:text-foreground"
             >
-              <ArrowLeft className="w-4 h-4" />
+              <ArrowLeft className="h-4 w-4" />
               Назад
             </button>
           ) : (
@@ -236,28 +282,27 @@ export default function OnboardingPage() {
             <button
               type="button"
               onClick={() => setStep(step + 1)}
-              className="flex items-center gap-1 px-6 py-2.5 bg-accent hover:bg-accent-hover text-white font-medium rounded-lg transition cursor-pointer"
+              className="flex cursor-pointer items-center gap-1 rounded-lg bg-accent px-6 py-2.5 font-medium text-white transition hover:bg-accent-hover"
             >
               Далее
-              <ArrowRight className="w-4 h-4" />
+              <ArrowRight className="h-4 w-4" />
             </button>
           ) : (
             <Link
               href="/dashboard"
-              className="flex items-center gap-1 px-6 py-2.5 bg-accent hover:bg-accent-hover text-white font-medium rounded-lg transition"
+              className="flex items-center gap-1 rounded-lg bg-accent px-6 py-2.5 font-medium text-white transition hover:bg-accent-hover"
             >
               Перейти в кабинет
-              <ArrowRight className="w-4 h-4" />
+              <ArrowRight className="h-4 w-4" />
             </Link>
           )}
         </div>
 
-        {/* Footer note */}
-        {step === STEPS && (
+        {step === STEPS ? (
           <p className="mt-6 text-center text-xs text-foreground-muted">
-            Слова появятся после первого использования мода
+            {firstSyncSummary()}
           </p>
-        )}
+        ) : null}
       </div>
     </div>
   );

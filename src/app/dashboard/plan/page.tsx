@@ -1,222 +1,175 @@
-"use client";
+import {
+  BarChart3,
+  BookOpen,
+  CreditCard,
+  Infinity as InfinityIcon,
+} from "lucide-react";
 
-import { Check, X, CreditCard, Zap, Crown, Gift } from "lucide-react";
-import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
+import { Card } from "@/components/ui/Card";
+import { PLAN_ORDER, PLANS } from "@/lib/config";
+import { dictionaryLimitText, translationUnitsText } from "@/lib/product";
+import type { DashboardPlanResponse } from "@/lib/contracts/dashboard";
+import { requireDashboardPageUser } from "@/lib/server/page-auth";
+import { getPlanPageData } from "@/lib/server/services/billing";
 
-const currentPlan = {
-  name: "Базовый",
-  price: "$4.99",
-  nextBilling: "10 мая 2026",
-  translationsLimit: 150,
-  translationsUsed: 18,
-  wordsLimit: 1000,
-  wordsUsed: 247,
-};
+function progressWidth(used: number, limit: number | null) {
+  const safeLimit = limit ?? used;
+  return `${Math.min(100, (used / Math.max(safeLimit || 1, 1)) * 100)}%`;
+}
 
-const plans = [
-  {
-    name: "Бесплатно",
-    price: "$0",
-    period: "",
-    icon: Gift,
-    features: [
-      { text: "30–50 переводов в день", included: true },
-      { text: "Ограниченный словарь (100 слов)", included: true },
-      { text: "Перевод слова", included: true },
-      { text: "Перевод выделенной фразы", included: true },
-      { text: "Синхронизация с кабинетом", included: true },
-      { text: "Базовая история", included: true },
-      { text: "Базовые карточки", included: true },
-      { text: "Полный поиск и фильтры", included: false },
-      { text: "Найди пару", included: false },
-      { text: "Прогресс по дням", included: false },
-      { text: "Автоперевод предложения", included: false },
-      { text: "Расширенная статистика", included: false },
-    ],
-  },
-  {
-    name: "Базовый",
-    price: "$4.99",
-    period: "/мес",
-    icon: Zap,
-    current: true,
-    features: [
-      { text: "150 переводов в день", included: true },
-      { text: "До 1000 слов в словаре", included: true },
-      { text: "Перевод слова", included: true },
-      { text: "Перевод выделенной фразы", included: true },
-      { text: "Синхронизация с кабинетом", included: true },
-      { text: "Полная история", included: true },
-      { text: "Карточки", included: true },
-      { text: "Полный поиск и фильтры", included: true },
-      { text: "Найди пару", included: true },
-      { text: "Прогресс по дням", included: true },
-      { text: "Автоперевод предложения", included: false },
-      { text: "Расширенная статистика", included: false },
-    ],
-  },
-  {
-    name: "Расширенный",
-    price: "$9.99",
-    period: "/мес",
-    icon: Crown,
-    features: [
-      { text: "500 переводов в день", included: true },
-      { text: "Неограниченный словарь", included: true },
-      { text: "Перевод слова", included: true },
-      { text: "Перевод выделенной фразы", included: true },
-      { text: "Синхронизация с кабинетом", included: true },
-      { text: "Полная история", included: true },
-      { text: "Все режимы обучения", included: true },
-      { text: "Полный поиск и фильтры", included: true },
-      { text: "Найди пару", included: true },
-      { text: "Прогресс по дням", included: true },
-      { text: "Автоперевод предложения", included: true },
-      { text: "Расширенная статистика", included: true },
-    ],
-  },
-];
-
-const payments = [
-  { date: "10.03.2026", amount: "$4.99", status: "Оплачено" },
-  { date: "10.02.2026", amount: "$4.99", status: "Оплачено" },
-  { date: "10.01.2026", amount: "$4.99", status: "Оплачено" },
-];
-
-export default function PlanPage() {
-  const translationPercent = Math.round((currentPlan.translationsUsed / currentPlan.translationsLimit) * 100);
-  const wordsPercent = Math.round((currentPlan.wordsUsed / currentPlan.wordsLimit) * 100);
+export default async function PlanPage() {
+  const user = await requireDashboardPageUser();
+  const data: DashboardPlanResponse = await getPlanPageData(user.id);
 
   return (
-    <div>
-      <h1 className="text-2xl font-bold mb-6">Тариф и лимиты</h1>
-
-      {/* Current Plan */}
-      <Card className="mb-8">
-        <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
-          <div>
-            <div className="flex items-center gap-3 mb-2">
-              <h2 className="text-lg font-semibold">Текущий тариф</h2>
-              <Badge variant="accent">{currentPlan.name}</Badge>
-            </div>
-            <p className="text-foreground-secondary text-sm">
-              Следующее списание: {currentPlan.nextBilling} — {currentPlan.price}/мес
-            </p>
-          </div>
-          <button className="px-4 py-2 bg-accent hover:bg-accent-hover text-white rounded-lg text-sm transition-colors">
-            Улучшить тариф
-          </button>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-foreground-secondary">Переводов сегодня</span>
-              <span className="text-sm font-medium">{currentPlan.translationsUsed} / {currentPlan.translationsLimit}</span>
-            </div>
-            <div className="h-3 bg-background-hover rounded-full overflow-hidden">
-              <div
-                className={`h-full rounded-full transition-all ${translationPercent > 80 ? "bg-warning" : "bg-accent"}`}
-                style={{ width: `${translationPercent}%` }}
-              />
-            </div>
-            <p className="text-xs text-foreground-muted mt-1">
-              Осталось: {currentPlan.translationsLimit - currentPlan.translationsUsed} | Обновление: завтра
-            </p>
-          </div>
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-foreground-secondary">Слов в словаре</span>
-              <span className="text-sm font-medium">{currentPlan.wordsUsed} / {currentPlan.wordsLimit}</span>
-            </div>
-            <div className="h-3 bg-background-hover rounded-full overflow-hidden">
-              <div
-                className={`h-full rounded-full transition-all ${wordsPercent > 80 ? "bg-warning" : "bg-accent-secondary"}`}
-                style={{ width: `${wordsPercent}%` }}
-              />
-            </div>
-            <p className="text-xs text-foreground-muted mt-1">
-              Свободно: {currentPlan.wordsLimit - currentPlan.wordsUsed} мест
-            </p>
-          </div>
-        </div>
-      </Card>
-
-      {/* Plan Comparison */}
-      <h2 className="text-lg font-semibold mb-4">Сравнение тарифов</h2>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-        {plans.map((plan) => {
-          const Icon = plan.icon;
-          return (
-            <div
-              key={plan.name}
-              className={`p-6 rounded-xl border transition-colors ${
-                plan.current
-                  ? "bg-accent-light border-accent"
-                  : "bg-background-card border-border hover:border-border-hover"
-              }`}
-            >
-              <div className="flex items-center gap-2 mb-3">
-                <Icon className={`w-5 h-5 ${plan.current ? "text-accent" : "text-foreground-secondary"}`} />
-                <h3 className="font-semibold">{plan.name}</h3>
-                {plan.current && <Badge variant="accent">Текущий</Badge>}
-              </div>
-              <div className="mb-4">
-                <span className="text-3xl font-bold">{plan.price}</span>
-                {plan.period && <span className="text-foreground-secondary">{plan.period}</span>}
-              </div>
-              <ul className="space-y-2 mb-6">
-                {plan.features.map((f, i) => (
-                  <li key={i} className="flex items-start gap-2 text-sm">
-                    {f.included ? (
-                      <Check className="w-4 h-4 text-success flex-shrink-0 mt-0.5" />
-                    ) : (
-                      <X className="w-4 h-4 text-foreground-muted flex-shrink-0 mt-0.5" />
-                    )}
-                    <span className={f.included ? "" : "text-foreground-muted"}>{f.text}</span>
-                  </li>
-                ))}
-              </ul>
-              {plan.current ? (
-                <button className="w-full py-2.5 rounded-lg border border-accent text-accent text-sm cursor-default">
-                  Текущий тариф
-                </button>
-              ) : (
-                <button className="w-full py-2.5 rounded-lg bg-accent hover:bg-accent-hover text-white text-sm transition-colors">
-                  {plan.price === "$0" ? "Перейти" : "Подключить"}
-                </button>
-              )}
-            </div>
-          );
-        })}
+    <div className="mx-auto max-w-6xl space-y-6">
+      <div>
+        <h1 className="flex items-center gap-2 text-2xl font-bold text-foreground">
+          <CreditCard className="h-6 w-6 text-accent" />
+          Тариф и лимиты
+        </h1>
+        <p className="mt-1 text-sm text-foreground-muted">
+          Правила, лимиты и цены здесь совпадают с публичной страницей тарифов.
+          Само подключение оплаты ещё может быть недоступно, но лимиты уже считаются по реальным данным аккаунта.
+        </p>
       </div>
 
-      {/* Payment History */}
-      <Card>
-        <div className="flex items-center gap-2 mb-4">
-          <CreditCard className="w-5 h-5 text-foreground-secondary" />
-          <h2 className="text-lg font-semibold">История платежей</h2>
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <Card className="lg:col-span-1">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm text-foreground-muted">Текущий план</p>
+              <h2 className="mt-1 text-2xl font-bold text-foreground">{data.currentPlan.name}</h2>
+            </div>
+            <Badge variant="accent">{data.currentPlan.price}</Badge>
+          </div>
+
+          <div className="space-y-4">
+            <div>
+              <p className="text-sm text-foreground-muted">Следующее списание</p>
+              <p className="mt-1 text-foreground">{data.currentPlan.nextBilling}</p>
+            </div>
+
+            <div>
+              <div className="mb-2 flex items-center justify-between text-sm">
+                <span className="text-foreground-muted">Единицы перевода за день</span>
+                <span className="text-foreground">
+                  {data.currentPlan.translationsUsed} / {data.currentPlan.translationsLimit ?? "∞"}
+                </span>
+              </div>
+              <div className="h-2 overflow-hidden rounded-full bg-background-hover">
+                <div
+                  className="h-full rounded-full bg-accent"
+                  style={{
+                    width: progressWidth(data.currentPlan.translationsUsed, data.currentPlan.translationsLimit),
+                  }}
+                />
+              </div>
+            </div>
+
+            <div>
+              <div className="mb-2 flex items-center justify-between text-sm">
+                <span className="text-foreground-muted">Карточки в словаре</span>
+                <span className="text-foreground">
+                  {data.currentPlan.wordsUsed} / {data.currentPlan.wordsLimit ?? "∞"}
+                </span>
+              </div>
+              <div className="h-2 overflow-hidden rounded-full bg-background-hover">
+                <div
+                  className="h-full rounded-full bg-accent-secondary"
+                  style={{ width: progressWidth(data.currentPlan.wordsUsed, data.currentPlan.wordsLimit) }}
+                />
+              </div>
+            </div>
+          </div>
+        </Card>
+
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3 lg:col-span-2">
+          {PLAN_ORDER.map((planId) => {
+            const plan = PLANS[planId];
+            const isCurrent = plan.label === data.currentPlan.name;
+
+            return (
+              <Card key={planId} className={isCurrent ? "border-accent" : ""}>
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <h3 className="text-lg font-semibold text-foreground">{plan.label}</h3>
+                    <p className="mt-1 text-sm text-foreground-muted">
+                      {plan.publicPrice}
+                      {plan.period}
+                    </p>
+                  </div>
+                  {isCurrent ? <Badge variant="accent">Текущий</Badge> : <Badge variant="default">Пока без оплаты</Badge>}
+                </div>
+
+                <div className="mt-4 space-y-3 text-sm">
+                  <div className="flex items-center gap-2 text-foreground-secondary">
+                    <BarChart3 className="h-4 w-4 text-accent" />
+                    {translationUnitsText(planId)}
+                  </div>
+                  <div className="flex items-center gap-2 text-foreground-secondary">
+                    {plan.dictionaryLimit === null ? (
+                      <InfinityIcon className="h-4 w-4 text-accent-secondary" />
+                    ) : (
+                      <BookOpen className="h-4 w-4 text-accent-secondary" />
+                    )}
+                    {dictionaryLimitText(planId)}
+                  </div>
+                  <ul className="space-y-1 text-foreground-muted">
+                    <li>Слова: {plan.features.wordTranslation ? "да" : "нет"}</li>
+                    <li>Фразы: {plan.features.phraseTranslation ? "да" : "нет"}</li>
+                    <li>Автоперевод предложений: {plan.features.sentenceTranslation ? "да" : "нет"}</li>
+                    <li>Поиск и упражнения: {plan.features.search || plan.features.exercises ? "да" : "нет"}</li>
+                    <li>Расширенная статистика: {plan.features.advancedStats ? "да" : "нет"}</li>
+                  </ul>
+                </div>
+              </Card>
+            );
+          })}
         </div>
+      </div>
+
+      <Card>
+        <h2 className="mb-4 text-lg font-semibold text-foreground">История платежей</h2>
         <div className="overflow-x-auto">
-          <table className="w-full">
+          <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-border text-left text-foreground-secondary text-sm">
-                <th className="pb-3 font-medium">Дата</th>
-                <th className="pb-3 font-medium">Сумма</th>
-                <th className="pb-3 font-medium">Статус</th>
+              <tr className="border-b border-border text-left text-foreground-muted">
+                <th className="py-3 pr-4 font-medium">Дата</th>
+                <th className="py-3 pr-4 font-medium">Сумма</th>
+                <th className="py-3 font-medium">Статус</th>
               </tr>
             </thead>
             <tbody>
-              {payments.map((p, i) => (
-                <tr key={i} className="border-b border-border/50">
-                  <td className="py-3 text-sm">{p.date}</td>
-                  <td className="py-3 text-sm font-medium">{p.amount}</td>
+              {data.payments.map((payment, index) => (
+                <tr key={`${payment.date}-${index}`} className="border-b border-border/50">
+                  <td className="py-3 pr-4 text-foreground">{payment.date}</td>
+                  <td className="py-3 pr-4 text-foreground-secondary">{payment.amount}</td>
                   <td className="py-3">
-                    <Badge variant="success">{p.status}</Badge>
+                    <Badge
+                      variant={
+                        payment.status === "Оплачено"
+                          ? "success"
+                          : payment.status === "Ошибка"
+                            ? "danger"
+                            : payment.status === "Возврат"
+                              ? "default"
+                            : "warning"
+                      }
+                    >
+                      {payment.status}
+                    </Badge>
                   </td>
                 </tr>
               ))}
+              {data.payments.length === 0 ? (
+                <tr>
+                  <td className="py-4 text-foreground-muted" colSpan={3}>
+                    Платежей пока нет. Тарифные правила уже показаны в кабинете, а полноценный публичный billing ещё догоняет продуктовую часть.
+                  </td>
+                </tr>
+              ) : null}
             </tbody>
           </table>
         </div>

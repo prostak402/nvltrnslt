@@ -1,184 +1,150 @@
-"use client";
+import { AlertTriangle, BookOpen, Clock, Plus, RotateCcw, TrendingUp } from "lucide-react";
 
-import { BookOpen, TrendingUp, AlertTriangle, Plus, RotateCcw } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { StatCard } from "@/components/ui/StatCard";
+import type { DashboardProgressResponse } from "@/lib/contracts/dashboard";
+import { requireDashboardPageUser } from "@/lib/server/page-auth";
+import { getProgressPageData } from "@/lib/server/services/study";
 
-const weeklyData = [
-  { day: "Пн", saved: 5, reviewed: 8 },
-  { day: "Вт", saved: 8, reviewed: 12 },
-  { day: "Ср", saved: 3, reviewed: 6 },
-  { day: "Чт", saved: 7, reviewed: 15 },
-  { day: "Пт", saved: 4, reviewed: 9 },
-  { day: "Сб", saved: 12, reviewed: 18 },
-  { day: "Вс", saved: 6, reviewed: 10 },
-];
-
-const novelStats = [
-  { name: "Everlasting Summer", words: 52, learned: 18, difficult: 9, newW: 25 },
-  { name: "Doki Doki Literature Club", words: 45, learned: 20, difficult: 8, newW: 17 },
-  { name: "Katawa Shoujo", words: 38, learned: 15, difficult: 6, newW: 17 },
-  { name: "Clannad", words: 34, learned: 12, difficult: 7, newW: 15 },
-  { name: "Steins;Gate", words: 28, learned: 10, difficult: 4, newW: 14 },
-];
-
-const statusBreakdown = [
-  { label: "Новые", count: 124, color: "bg-accent" },
-  { label: "Сложные", count: 34, color: "bg-warning" },
-  { label: "Выученные", count: 89, color: "bg-success" },
-];
-
-const totalWords = 247;
-
-// Generate 30 days of activity
-const activityDays = Array.from({ length: 30 }, (_, i) => {
-  const active = Math.random() > 0.3;
-  const intensity = active ? Math.ceil(Math.random() * 3) : 0;
-  return { day: i + 1, intensity };
-});
-
-export default function ProgressPage() {
-  const maxActivity = Math.max(...weeklyData.map((d) => Math.max(d.saved, d.reviewed)));
+export default async function ProgressPage() {
+  const user = await requireDashboardPageUser();
+  const data: DashboardProgressResponse = await getProgressPageData(user.id);
+  const maxActivity = data.weeklyData.reduce((max, day) => Math.max(max, day.saved, day.reviewed), 0) || 1;
 
   return (
-    <div>
-      <h1 className="text-2xl font-bold mb-6">Прогресс</h1>
-
-      {/* Top Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-8">
-        <StatCard icon={BookOpen} label="Слов всего" value="247" />
-        <StatCard icon={TrendingUp} label="Выучено" value="89" change={{ value: "+12", positive: true }} />
-        <StatCard icon={AlertTriangle} label="Сложных" value="34" />
-        <StatCard icon={Plus} label="За неделю добавлено" value="28" change={{ value: "+5", positive: true }} />
-        <StatCard icon={RotateCcw} label="За неделю повторено" value="45" change={{ value: "+8", positive: true }} />
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold text-foreground">Прогресс</h1>
+        <p className="mt-1 text-sm text-foreground-muted">Статистика по карточкам, сериям и новеллам.</p>
       </div>
 
-      {/* Weekly Chart */}
-      <Card className="mb-8">
-        <h2 className="text-lg font-semibold mb-4">Активность за неделю</h2>
-        <div className="flex items-center gap-4 mb-4 text-sm">
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6">
+        <StatCard icon={BookOpen} label="Карточек всего" value={data.totalWords} />
+        <StatCard icon={TrendingUp} label="Точность" value={`${data.accuracy}%`} />
+        <StatCard icon={AlertTriangle} label="К повторению" value={data.dueItems} />
+        <StatCard icon={Plus} label="За неделю добавлено" value={data.weeklyAdded} />
+        <StatCard icon={RotateCcw} label="За неделю повторено" value={data.weeklyReviewed} />
+        <StatCard icon={Clock} label="Серия дней" value={data.streak} />
+      </div>
+
+      <Card className="space-y-4">
+        <h2 className="text-lg font-semibold text-foreground">Активность за неделю</h2>
+        <div className="flex items-center gap-4 text-sm">
           <span className="flex items-center gap-2">
-            <span className="w-3 h-3 rounded bg-accent" /> Сохранено
+            <span className="h-3 w-3 rounded bg-accent" /> Сохранено
           </span>
           <span className="flex items-center gap-2">
-            <span className="w-3 h-3 rounded bg-accent-secondary" /> Повторено
+            <span className="h-3 w-3 rounded bg-accent-secondary" /> Повторено
           </span>
         </div>
-        <div className="flex items-end gap-3 h-48">
-          {weeklyData.map((d) => (
-            <div key={d.day} className="flex-1 flex flex-col items-center gap-1">
-              <div className="flex items-end gap-1 w-full h-40">
-                <div className="flex-1 flex flex-col justify-end">
+        <div className="flex h-48 items-end gap-3">
+          {data.weeklyData.map((day) => (
+            <div key={day.day} className="flex flex-1 flex-col items-center gap-1">
+              <div className="flex h-40 w-full items-end gap-1">
+                <div className="flex flex-1 flex-col justify-end">
                   <div
-                    className="bg-accent rounded-t-sm w-full transition-all"
-                    style={{ height: `${(d.saved / maxActivity) * 100}%`, minHeight: d.saved > 0 ? "4px" : "0" }}
+                    className="w-full rounded-t-sm bg-accent transition-all"
+                    style={{
+                      height: `${(day.saved / maxActivity) * 100}%`,
+                      minHeight: day.saved > 0 ? "4px" : "0",
+                    }}
                   />
                 </div>
-                <div className="flex-1 flex flex-col justify-end">
+                <div className="flex flex-1 flex-col justify-end">
                   <div
-                    className="bg-accent-secondary rounded-t-sm w-full transition-all"
-                    style={{ height: `${(d.reviewed / maxActivity) * 100}%`, minHeight: d.reviewed > 0 ? "4px" : "0" }}
+                    className="w-full rounded-t-sm bg-accent-secondary transition-all"
+                    style={{
+                      height: `${(day.reviewed / maxActivity) * 100}%`,
+                      minHeight: day.reviewed > 0 ? "4px" : "0",
+                    }}
                   />
                 </div>
               </div>
-              <span className="text-xs text-foreground-muted">{d.day}</span>
+              <span className="text-xs text-foreground-muted">{day.day}</span>
               <div className="flex gap-1 text-xs text-foreground-muted">
-                <span>{d.saved}</span>/<span>{d.reviewed}</span>
+                <span>{day.saved}</span>/<span>{day.reviewed}</span>
               </div>
             </div>
           ))}
         </div>
       </Card>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-        {/* By Status */}
+      <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
         <Card>
-          <h2 className="text-lg font-semibold mb-4">По статусам</h2>
+          <h2 className="mb-4 text-lg font-semibold text-foreground">По статусам</h2>
           <div className="space-y-4">
-            {statusBreakdown.map((s) => (
-              <div key={s.label}>
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-sm font-medium">{s.label}</span>
+            {data.statusBreakdown.map((status) => (
+              <div key={status.label}>
+                <div className="mb-1.5 flex items-center justify-between">
+                  <span className="text-sm font-medium text-foreground">{status.label}</span>
                   <span className="text-sm text-foreground-secondary">
-                    {s.count} ({Math.round((s.count / totalWords) * 100)}%)
+                    {status.count} ({Math.round((status.count / Math.max(data.totalWords, 1)) * 100)}%)
                   </span>
                 </div>
-                <div className="h-3 bg-background-hover rounded-full overflow-hidden">
+                <div className="h-3 overflow-hidden rounded-full bg-background-hover">
                   <div
-                    className={`h-full ${s.color} rounded-full transition-all`}
-                    style={{ width: `${(s.count / totalWords) * 100}%` }}
+                    className={`h-full ${status.color} rounded-full transition-all`}
+                    style={{ width: `${(status.count / Math.max(data.totalWords, 1)) * 100}%` }}
                   />
                 </div>
               </div>
             ))}
           </div>
-          <div className="mt-4 pt-4 border-t border-border">
+          <div className="mt-4 border-t border-border pt-4">
             <div className="flex items-center justify-between text-sm">
-              <span className="text-foreground-secondary">Всего слов</span>
-              <span className="font-semibold">{totalWords}</span>
+              <span className="text-foreground-secondary">Всего карточек</span>
+              <span className="font-semibold text-foreground">{data.totalWords}</span>
             </div>
           </div>
         </Card>
 
-        {/* Activity Streak */}
         <Card>
-          <h2 className="text-lg font-semibold mb-2">Серия активности</h2>
-          <p className="text-3xl font-bold text-accent mb-4">7 <span className="text-base font-normal text-foreground-secondary">дней подряд</span></p>
-          <div className="grid grid-cols-10 gap-1.5">
-            {activityDays.map((d) => (
-              <div
-                key={d.day}
-                className={`aspect-square rounded-sm ${
-                  d.intensity === 0
-                    ? "bg-background-hover"
-                    : d.intensity === 1
-                    ? "bg-accent/30"
-                    : d.intensity === 2
-                    ? "bg-accent/60"
-                    : "bg-accent"
-                }`}
-                title={`День ${d.day}`}
-              />
-            ))}
-          </div>
-          <div className="flex items-center justify-between mt-3 text-xs text-foreground-muted">
-            <span>Меньше</span>
-            <div className="flex items-center gap-1">
-              <div className="w-3 h-3 rounded-sm bg-background-hover" />
-              <div className="w-3 h-3 rounded-sm bg-accent/30" />
-              <div className="w-3 h-3 rounded-sm bg-accent/60" />
-              <div className="w-3 h-3 rounded-sm bg-accent" />
-            </div>
-            <span>Больше</span>
-          </div>
+          <h2 className="mb-2 text-lg font-semibold text-foreground">Серия активности</h2>
+          <p className="mb-4 text-3xl font-bold text-accent">
+            {data.streak} <span className="text-base font-normal text-foreground-secondary">дней подряд</span>
+          </p>
+          <p className="text-sm text-foreground-secondary">
+            Показатель точности по последним ревью: <span className="font-semibold text-foreground">{data.accuracy}%</span>
+          </p>
+          <p className="mt-2 text-sm text-foreground-secondary">
+            Карточек, готовых к повторению прямо сейчас: <span className="font-semibold text-foreground">{data.dueItems}</span>
+          </p>
         </Card>
       </div>
 
-      {/* By Novel */}
       <Card>
-        <h2 className="text-lg font-semibold mb-4">По новеллам</h2>
+        <h2 className="mb-4 text-lg font-semibold text-foreground">По новеллам</h2>
         <div className="space-y-4">
-          {novelStats.map((novel) => (
-            <div key={novel.name} className="p-4 bg-background-hover/50 rounded-lg">
-              <div className="flex items-center justify-between mb-3">
+          {data.novelStats.map((novel) => (
+            <div key={novel.name} className="rounded-lg bg-background-hover/50 p-4">
+              <div className="mb-3 flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <BookOpen className="w-4 h-4 text-accent" />
-                  <span className="font-medium">{novel.name}</span>
+                  <BookOpen className="h-4 w-4 text-accent" />
+                  <span className="font-medium text-foreground">{novel.name}</span>
                 </div>
-                <span className="text-foreground-secondary text-sm">{novel.words} слов</span>
+                <span className="text-sm text-foreground-secondary">{novel.words} карточек</span>
               </div>
-              <div className="flex gap-1 h-2.5 rounded-full overflow-hidden bg-background-card">
-                <div className="bg-success rounded-l-full" style={{ width: `${(novel.learned / novel.words) * 100}%` }} />
-                <div className="bg-warning" style={{ width: `${(novel.difficult / novel.words) * 100}%` }} />
-                <div className="bg-accent rounded-r-full" style={{ width: `${(novel.newW / novel.words) * 100}%` }} />
+              <div className="flex gap-1 overflow-hidden rounded-full bg-background-card">
+                <div className="rounded-l-full bg-success" style={{ width: `${(novel.learned / Math.max(novel.words, 1)) * 100}%` }} />
+                <div className="bg-warning" style={{ width: `${(novel.difficult / Math.max(novel.words, 1)) * 100}%` }} />
+                <div className="rounded-r-full bg-accent" style={{ width: `${(novel.newW / Math.max(novel.words, 1)) * 100}%` }} />
               </div>
-              <div className="flex gap-4 mt-2 text-xs text-foreground-muted">
-                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded bg-success" /> Выучено: {novel.learned}</span>
-                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded bg-warning" /> Сложные: {novel.difficult}</span>
-                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded bg-accent" /> Новые: {novel.newW}</span>
+              <div className="mt-2 flex flex-wrap gap-4 text-xs text-foreground-muted">
+                <span className="flex items-center gap-1">
+                  <span className="h-2 w-2 rounded bg-success" /> Выучено: {novel.learned}
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="h-2 w-2 rounded bg-warning" /> Сложные: {novel.difficult}
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="h-2 w-2 rounded bg-accent" /> Новые: {novel.newW}
+                </span>
               </div>
             </div>
           ))}
+          {data.novelStats.length === 0 ? (
+            <p className="text-sm text-foreground-muted">Статистика по новеллам появится после первых синхронизаций.</p>
+          ) : null}
         </div>
       </Card>
     </div>

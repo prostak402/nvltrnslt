@@ -3,16 +3,35 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev --port 32173",
     "build": "next build",
-    "start": "next start",
-    "lint": "eslint"
+    "start": "next start --port 32173",
+    "lint": "eslint",
+    "test": "node --test --test-concurrency=1 \"tests/**/*.test.mjs\"",
+    "healthcheck": "node ./scripts/healthcheck.mjs",
+    "deploy:package": "powershell -ExecutionPolicy Bypass -File ./scripts/package-server-bundle.ps1",
+    "mod:package": "powershell -ExecutionPolicy Bypass -File ./scripts/package-mod.ps1",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:check": "drizzle-kit check",
+    "db:seed": "node ./scripts/db-seed.mjs",
+    "db:push": "drizzle-kit push",
+    "local:up": "node ./scripts/local-up.mjs",
+    "local:down": "node ./scripts/local-down.mjs",
+    "local:reset-db": "node ./scripts/local-down.mjs --volumes"
   },
   "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "drizzle-kit": "^0.31.10",
+    "drizzle-orm": "^0.45.2",
+    "jose": "^6.2.2",
     "lucide-react": "^1.7.0",
     "next": "16.2.2",
+    "postgres": "^3.4.9",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "server-only": "^0.0.1",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

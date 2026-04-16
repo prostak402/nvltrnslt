@@ -1,0 +1,21 @@
+NVLingo Ren'Py Mod v0.1.0
+
+Release type:
+- First versioned release package for the Ren'Py desktop mod
+
+Included in this release:
+- Universal desktop archive for Ren'Py 7.x and 8.x on Windows, Linux, and macOS
+- Website-linked activation through `nvl_translate_key.json`
+- Server-backed translation flow through the NVLingo API
+- Sync with dashboard data for saved words, phrases, history, and review progress
+- Versioned package structure with install notes, release notes, and manifest metadata
+
+Operational notes:
+- Billing is not enabled in the mod flow and does not affect installation
+- Password recovery currently uses the website preview-link flow until an email provider is selected
+- Telegram alerts are configured on the server side and are not required for the mod itself
+
+Known limitations:
+- Internet access is required for translation and account sync
+- The archive contains script files and notes only; it does not ship separate OS-specific binaries
+- Compatibility depends on the target game being a desktop Ren'Py build

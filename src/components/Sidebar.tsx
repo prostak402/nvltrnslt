@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -14,11 +13,13 @@ import {
   CreditCard,
   Settings,
   HelpCircle,
-  Menu,
   X,
   ChevronRight,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+
+import { initials, planLabel, planTranslationLimit } from "@/lib/client/presentation";
+import type { PlanId, UserRole } from "@/lib/types";
 
 type NavItem = {
   label: string;
@@ -42,9 +43,16 @@ const navItems: NavItem[] = [
 type SidebarProps = {
   open: boolean;
   onClose: () => void;
+  user?: {
+    name: string;
+    email: string;
+    role: UserRole;
+    plan: PlanId;
+  } | null;
+  onLogout?: () => void;
 };
 
-export function Sidebar({ open, onClose }: SidebarProps) {
+export function Sidebar({ open, onClose, user, onLogout }: SidebarProps) {
   const pathname = usePathname();
 
   const isActive = (href: string) => {
@@ -54,10 +62,9 @@ export function Sidebar({ open, onClose }: SidebarProps) {
 
   const sidebarContent = (
     <>
-      {/* Logo */}
       <div className="flex items-center justify-between h-16 px-5 border-b border-border shrink-0">
         <Link href="/" className="flex items-center gap-2 font-bold text-lg text-foreground">
-          <span className="text-accent">NVL</span> Translate
+          <span className="text-accent">NV</span> Lingo
         </Link>
         <button
           onClick={onClose}
@@ -68,7 +75,6 @@ export function Sidebar({ open, onClose }: SidebarProps) {
         </button>
       </div>
 
-      {/* Nav items */}
       <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-1">
         {navItems.map((item) => {
           const active = isActive(item.href);
@@ -85,35 +91,53 @@ export function Sidebar({ open, onClose }: SidebarProps) {
             >
               <item.icon className="w-5 h-5 shrink-0" />
               {item.label}
-              {active && <ChevronRight className="w-4 h-4 ml-auto" />}
+              {active ? <ChevronRight className="w-4 h-4 ml-auto" /> : null}
             </Link>
           );
         })}
       </nav>
 
-      {/* User info block */}
       <div className="p-4 border-t border-border shrink-0">
         <div className="bg-background-hover rounded-lg p-3">
           <div className="flex items-center gap-3 mb-2">
             <div className="w-8 h-8 rounded-full bg-accent-light flex items-center justify-center text-accent text-sm font-bold">
-              U
+              {user ? initials(user.name) : "U"}
             </div>
             <div className="min-w-0">
-              <p className="text-sm font-medium text-foreground truncate">Пользователь</p>
+              <p className="text-sm font-medium text-foreground truncate">{user?.name ?? "Пользователь"}</p>
               <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-accent-light text-accent">
-                Бесплатный
+                {user ? planLabel(user.plan) : "План"}
               </span>
             </div>
           </div>
+          <p className="text-xs text-foreground-muted truncate">{user?.email ?? "Авторизуйтесь, чтобы синхронизировать мод"}</p>
           <div className="mt-2">
             <div className="flex items-center justify-between text-xs mb-1">
-              <span className="text-foreground-muted">Лимит слов</span>
-              <span className="text-foreground-secondary">42 / 100</span>
+              <span className="text-foreground-muted">Лимит переводов</span>
+              <span className="text-foreground-secondary">0 / {user ? planTranslationLimit(user.plan) : "0"}</span>
             </div>
             <div className="w-full h-1.5 bg-background rounded-full overflow-hidden">
-              <div className="h-full bg-accent rounded-full" style={{ width: "42%" }} />
+              <div className="h-full bg-accent rounded-full" style={{ width: "0%" }} />
             </div>
           </div>
+          {user?.role === "admin" ? (
+            <Link
+              href="/admin"
+              onClick={onClose}
+              className="mt-3 inline-flex text-xs text-accent hover:text-accent-hover transition-colors"
+            >
+              Открыть админ-панель
+            </Link>
+          ) : null}
+          {onLogout ? (
+            <button
+              type="button"
+              onClick={onLogout}
+              className="mt-3 block text-xs text-foreground-secondary hover:text-foreground transition-colors"
+            >
+              Выйти из аккаунта
+            </button>
+          ) : null}
         </div>
       </div>
     </>
@@ -121,15 +145,8 @@ export function Sidebar({ open, onClose }: SidebarProps) {
 
   return (
     <>
-      {/* Mobile overlay */}
-      {open && (
-        <div
-          className="fixed inset-0 z-40 bg-black/50 lg:hidden"
-          onClick={onClose}
-        />
-      )}
+      {open ? <div className="fixed inset-0 z-40 bg-black/50 lg:hidden" onClick={onClose} /> : null}
 
-      {/* Sidebar */}
       <aside
         className={`fixed top-0 left-0 z-50 h-full w-64 bg-background-secondary border-r border-border flex flex-col transition-transform duration-300 lg:translate-x-0 lg:static lg:z-auto ${
           open ? "translate-x-0" : "-translate-x-full"

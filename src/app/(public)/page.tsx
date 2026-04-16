@@ -1,46 +1,47 @@
 import Link from "next/link";
 import {
-  Download,
-  KeyRound,
-  Bookmark,
-  GraduationCap,
-  MousePointerClick,
-  TextSelect,
-  Save,
-  MessageSquareText,
-  RefreshCw,
-  HardDrive,
-  Clock,
-  Sparkles,
-  BookOpen,
-  Search,
-  Layers,
-  Puzzle,
-  TrendingUp,
-  History,
-  Gauge,
-  Smartphone,
-  X,
-  Check,
-  ChevronDown,
   ArrowRight,
+  Bookmark,
+  BookOpen,
+  Check,
+  Download,
+  Gauge,
+  GraduationCap,
+  HardDrive,
+  History,
+  KeyRound,
+  Layers,
+  MessageSquareText,
+  MousePointerClick,
+  Puzzle,
+  RefreshCw,
+  Search,
+  Smartphone,
+  Sparkles,
+  TextSelect,
+  TrendingUp,
+  X,
 } from "lucide-react";
-import { FAQAccordion } from "./faq-accordion";
 
-/* ───────────────── Hero ───────────────── */
+import { FAQAccordion } from "./faq-accordion";
+import {
+  activationFlowSummary,
+  deviceLimitSummary,
+  freePlanSummary,
+  paidPlansSummary,
+  publicPlanCards,
+} from "@/lib/product";
 
 function HeroSection() {
   return (
     <section className="relative overflow-hidden py-20 md:py-32">
-      {/* gradient bg */}
       <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-accent-light via-background to-background" />
 
       <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="grid items-center gap-12 lg:grid-cols-2">
-          {/* left */}
           <div className="max-w-xl">
             <h1 className="text-4xl font-bold leading-tight tracking-tight text-foreground sm:text-5xl lg:text-6xl">
-              Учите английский через визуальные новеллы на&nbsp;Ren&apos;Py
+              Учите английский через визуальные новеллы на Ren&apos;Py
             </h1>
             <p className="mt-6 text-lg leading-relaxed text-foreground-secondary">
               Переводите слова и фразы прямо в игре, сохраняйте их в личный
@@ -63,11 +64,8 @@ function HeroSection() {
             </div>
           </div>
 
-          {/* right — stylised mockup */}
           <div className="relative mx-auto w-full max-w-md lg:max-w-none">
-            {/* VN window */}
             <div className="rounded-xl border border-border bg-background-card p-4 shadow-2xl">
-              {/* title bar */}
               <div className="mb-3 flex items-center gap-2">
                 <span className="h-3 w-3 rounded-full bg-danger" />
                 <span className="h-3 w-3 rounded-full bg-warning" />
@@ -77,15 +75,15 @@ function HeroSection() {
                 </span>
               </div>
 
-              {/* scene */}
               <div className="relative rounded-lg bg-background-secondary p-6">
                 <p className="font-mono text-sm leading-relaxed text-foreground-secondary">
-                  &quot;The <span className="rounded bg-accent-light px-1 text-accent">ancient</span>{" "}
-                  library held secrets that no one dared to
-                  explore.&quot;
+                  &quot;The{" "}
+                  <span className="rounded bg-accent-light px-1 text-accent">
+                    ancient
+                  </span>{" "}
+                  library held secrets that no one dared to explore.&quot;
                 </p>
 
-                {/* translation popup */}
                 <div className="mt-3 inline-block rounded-lg border border-accent bg-background-card px-4 py-2 shadow-lg">
                   <p className="text-xs font-semibold text-accent">ancient</p>
                   <p className="text-sm text-foreground">древний, старинный</p>
@@ -98,14 +96,13 @@ function HeroSection() {
               </div>
             </div>
 
-            {/* dashboard preview — floating card */}
             <div className="absolute -bottom-6 -right-4 w-56 rounded-xl border border-border bg-background-card p-4 shadow-xl sm:-right-8">
               <p className="mb-2 text-xs font-semibold text-foreground-muted">
                 Личный кабинет
               </p>
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs text-foreground-secondary">Слова</span>
+                  <span className="text-xs text-foreground-secondary">Карточки</span>
                   <span className="text-xs font-bold text-accent">128</span>
                 </div>
                 <div className="h-1.5 rounded-full bg-background-secondary">
@@ -127,32 +124,29 @@ function HeroSection() {
   );
 }
 
-/* ───────────────── How it works ───────────────── */
-
 const steps = [
   {
     icon: Download,
     title: "Установите мод",
     description:
-      "Скачайте мод и поместите файлы в папку game вашей визуальной новеллы.",
+      "Скачайте мод и поместите файлы в папку game/ вашей визуальной новеллы.",
   },
   {
     icon: KeyRound,
-    title: "Введите код доступа",
-    description:
-      "Зарегистрируйтесь на сайте и введите полученный код в настройках мода.",
+    title: "Скачайте ключ-файл",
+    description: activationFlowSummary(),
   },
   {
     icon: Bookmark,
     title: "Сохраняйте слова во время чтения",
     description:
-      "Кликайте на незнакомые слова — перевод появится мгновенно. Сохраняйте в словарь одной кнопкой.",
+      "Кликайте на незнакомые слова и фразы, получайте перевод и сохраняйте материал в словарь одной кнопкой.",
   },
   {
     icon: GraduationCap,
     title: "Повторяйте на сайте",
     description:
-      "Открывайте личный кабинет, повторяйте слова с помощью карточек и отслеживайте прогресс.",
+      "Открывайте кабинет, тренируйте карточки, следите за историей и прогрессом.",
   },
 ];
 
@@ -164,17 +158,17 @@ function HowItWorksSection() {
           Как это работает
         </h2>
         <p className="mx-auto mt-4 max-w-2xl text-center text-foreground-secondary">
-          Четыре простых шага от установки до результата
+          Четыре простых шага от установки до первого сохранённого слова
         </p>
 
         <div className="mt-14 grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
-          {steps.map((step, i) => (
+          {steps.map((step, index) => (
             <div
               key={step.title}
               className="relative rounded-xl border border-border bg-background-card p-6 transition hover:border-border-hover hover:bg-background-hover"
             >
               <span className="absolute -top-4 left-6 flex h-8 w-8 items-center justify-center rounded-full bg-accent text-sm font-bold text-white">
-                {i + 1}
+                {index + 1}
               </span>
               <step.icon className="mt-2 h-8 w-8 text-accent" />
               <h3 className="mt-4 text-lg font-semibold text-foreground">
@@ -191,83 +185,81 @@ function HowItWorksSection() {
   );
 }
 
-/* ───────────────── Mod features ───────────────── */
-
 const modFeatures = [
   {
     icon: MousePointerClick,
     title: "Перевод слова",
-    description: "Кликните по любому слову в диалоге — мгновенный перевод.",
+    description: "Кликните по слову в диалоге и сразу получите перевод.",
   },
   {
     icon: TextSelect,
     title: "Перевод выделенной фразы",
-    description: "Выделите несколько слов для перевода целой фразы.",
+    description: "Выделите несколько слов для перевода всей фразы целиком.",
   },
   {
-    icon: Save,
+    icon: Bookmark,
     title: "Сохранение слов",
-    description: "Добавляйте слова в личный словарь одним нажатием.",
+    description: "Добавляйте полезные слова в словарь прямо во время чтения.",
   },
   {
     icon: MessageSquareText,
     title: "Сохранение фраз",
-    description: "Сохраняйте целые фразы с контекстом из новеллы.",
+    description: "Сохраняйте фразы вместе с контекстом из новеллы.",
   },
   {
     icon: RefreshCw,
     title: "Синхронизация с кабинетом",
-    description: "Все сохранённые слова автоматически появляются на сайте.",
+    description: "Слова и фразы автоматически появляются в вашем аккаунте.",
   },
   {
     icon: HardDrive,
     title: "Локальный кэш",
-    description: "Переводы кэшируются локально для быстрого доступа без интернета.",
+    description: "Уже переведённые фрагменты доступны быстрее и без лишних запросов.",
   },
   {
-    icon: Clock,
-    title: "Базовая история",
-    description: "История переведённых слов сохраняется в рамках сессии.",
+    icon: History,
+    title: "История",
+    description: "Вы видите недавние переводы и не теряете контекст чтения.",
   },
   {
     icon: Sparkles,
-    title: "Автоперевод предложения",
+    title: "Автоперевод предложений",
     description:
-      "Автоматический перевод всего предложения целиком при чтении.",
+      "На расширенном тарифе доступен автоперевод целых предложений.",
     badge: "Расширенный тариф",
   },
 ];
 
 function ModFeaturesSection() {
   return (
-    <section className="py-20">
+    <section id="download" className="py-20">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <h2 className="text-center text-3xl font-bold text-foreground sm:text-4xl">
           Что умеет мод
         </h2>
         <p className="mx-auto mt-4 max-w-2xl text-center text-foreground-secondary">
-          Всё необходимое для комфортного изучения английского прямо в игре
+          Всё, что нужно для комфортного чтения и сбора слов прямо в игре
         </p>
 
         <div className="mt-14 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {modFeatures.map((f) => (
+          {modFeatures.map((feature) => (
             <div
-              key={f.title}
+              key={feature.title}
               className="rounded-xl border border-border bg-background-card p-6 transition hover:border-border-hover hover:bg-background-hover"
             >
               <div className="flex items-start justify-between">
-                <f.icon className="h-7 w-7 text-accent" />
-                {f.badge && (
+                <feature.icon className="h-7 w-7 text-accent" />
+                {"badge" in feature ? (
                   <span className="rounded-full bg-accent-light px-3 py-0.5 text-xs font-medium text-accent">
-                    {f.badge}
+                    {feature.badge}
                   </span>
-                )}
+                ) : null}
               </div>
               <h3 className="mt-4 text-lg font-semibold text-foreground">
-                {f.title}
+                {feature.title}
               </h3>
               <p className="mt-2 text-sm leading-relaxed text-foreground-secondary">
-                {f.description}
+                {feature.description}
               </p>
             </div>
           ))}
@@ -276,8 +268,6 @@ function ModFeaturesSection() {
     </section>
   );
 }
-
-/* ───────────────── Dashboard features ───────────────── */
 
 const dashboardFeatures = [
   {
@@ -288,37 +278,37 @@ const dashboardFeatures = [
   {
     icon: Search,
     title: "Поиск и фильтры",
-    description: "Быстрый поиск, сортировка и фильтрация по статусу изучения.",
+    description: "Быстрый поиск и сортировка по статусу изучения.",
   },
   {
     icon: Layers,
     title: "Карточки",
-    description: "Повторяйте слова с помощью интерактивных флеш-карточек.",
+    description: "Повторяйте слова через привычные карточки.",
   },
   {
     icon: Puzzle,
-    title: "Найди пару",
-    description: "Игровой режим: соедините слово с его переводом на время.",
+    title: "Упражнения",
+    description: "Дополнительные режимы закрепления на платных тарифах.",
   },
   {
     icon: TrendingUp,
     title: "Прогресс",
-    description: "Отслеживайте статистику изучения и динамику по дням.",
+    description: "Следите за динамикой и количеством выученных слов.",
   },
   {
     icon: History,
     title: "История",
-    description: "Полная история переводов и действий в хронологическом порядке.",
+    description: "Смотрите недавние переводы и действия в кабинете.",
   },
   {
     icon: Gauge,
     title: "Лимиты и тариф",
-    description: "Контролируйте использование лимитов и управляйте подпиской.",
+    description: "Контролируйте использование квоты и план аккаунта.",
   },
   {
     icon: Smartphone,
-    title: "Управление устройствами",
-    description: "Привязывайте и отвязывайте устройства в личном кабинете.",
+    title: "Устройства",
+    description: deviceLimitSummary(),
   },
 ];
 
@@ -330,21 +320,22 @@ function DashboardFeaturesSection() {
           Что есть в кабинете
         </h2>
         <p className="mx-auto mt-4 max-w-2xl text-center text-foreground-secondary">
-          Личный кабинет для повторения слов и отслеживания прогресса
+          Личный кабинет для повторения слов, контроля лимитов и отслеживания
+          прогресса
         </p>
 
         <div className="mt-14 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-          {dashboardFeatures.map((f) => (
+          {dashboardFeatures.map((feature) => (
             <div
-              key={f.title}
+              key={feature.title}
               className="rounded-xl border border-border bg-background-card p-6 transition hover:border-border-hover hover:bg-background-hover"
             >
-              <f.icon className="h-7 w-7 text-accent-secondary" />
+              <feature.icon className="h-7 w-7 text-accent-secondary" />
               <h3 className="mt-4 text-lg font-semibold text-foreground">
-                {f.title}
+                {feature.title}
               </h3>
               <p className="mt-2 text-sm leading-relaxed text-foreground-secondary">
-                {f.description}
+                {feature.description}
               </p>
             </div>
           ))}
@@ -354,22 +345,18 @@ function DashboardFeaturesSection() {
   );
 }
 
-/* ───────────────── Comparison ───────────────── */
-
 const withoutService = [
-  "Alt+Tab из игры в браузер",
-  "Открыть Google Translate",
-  "Скопировать слово, вставить, перевести",
-  "Записать в заметки вручную",
-  "Потеря контекста и погружения",
+  "Выходить из игры и открывать переводчик в браузере",
+  "Копировать и вставлять слова вручную",
+  "Терять контекст сцены во время чтения",
+  "Вести словарь в заметках отдельно от игры",
 ];
 
 const withService = [
-  "Клик по слову прямо в игре",
-  "Мгновенный перевод без переключения",
-  "Сохранение в словарь одной кнопкой",
-  "Повторение на сайте с карточками",
-  "Полное погружение в новеллу",
+  "Кликать по слову прямо в игре",
+  "Сохранять слово или фразу одной кнопкой",
+  "Повторять материал в кабинете с карточками и историей",
+  "Читать без постоянных переключений между окнами",
 ];
 
 function ComparisonSection() {
@@ -377,14 +364,13 @@ function ComparisonSection() {
     <section className="py-20">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <h2 className="text-center text-3xl font-bold text-foreground sm:text-4xl">
-          Почему это удобно
+          Почему это удобнее
         </h2>
         <p className="mx-auto mt-4 max-w-2xl text-center text-foreground-secondary">
-          Сравните процесс изучения слов с нашим сервисом и без
+          Сравните обычный процесс перевода с работой через NVLingo
         </p>
 
         <div className="mt-14 grid gap-8 md:grid-cols-2">
-          {/* Without */}
           <div className="rounded-xl border border-danger/30 bg-danger-light p-8">
             <h3 className="text-xl font-semibold text-danger">Без сервиса</h3>
             <ul className="mt-6 space-y-4">
@@ -397,7 +383,6 @@ function ComparisonSection() {
             </ul>
           </div>
 
-          {/* With */}
           <div className="rounded-xl border border-success/30 bg-[rgba(0,184,148,0.1)] p-8">
             <h3 className="text-xl font-semibold text-success">С сервисом</h3>
             <ul className="mt-6 space-y-4">
@@ -415,47 +400,9 @@ function ComparisonSection() {
   );
 }
 
-/* ───────────────── Pricing preview ───────────────── */
-
-const plans = [
-  {
-    name: "Бесплатно",
-    price: "0 ₽",
-    features: [
-      "50 переводов в день",
-      "Сохранение до 100 слов",
-      "Базовые карточки",
-      "1 устройство",
-    ],
-    highlighted: false,
-  },
-  {
-    name: "Базовый",
-    price: "149 ₽/мес",
-    features: [
-      "500 переводов в день",
-      "Сохранение до 2 000 слов",
-      "Все режимы повторения",
-      "3 устройства",
-      "История переводов",
-    ],
-    highlighted: true,
-  },
-  {
-    name: "Расширенный",
-    price: "299 ₽/мес",
-    features: [
-      "Безлимитные переводы",
-      "Безлимитный словарь",
-      "Автоперевод предложений",
-      "5 устройств",
-      "Приоритетная поддержка",
-    ],
-    highlighted: false,
-  },
-];
-
 function PricingSection() {
+  const plans = publicPlanCards();
+
   return (
     <section className="py-20">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
@@ -463,33 +410,29 @@ function PricingSection() {
           Тарифы
         </h2>
         <p className="mx-auto mt-4 max-w-2xl text-center text-foreground-secondary">
-          Выберите подходящий план и начните учить английский уже сегодня
+          Те же правила, лимиты и цены вы увидите и в кабинете
         </p>
 
         <div className="mt-14 grid gap-8 md:grid-cols-3">
           {plans.map((plan) => (
             <div
-              key={plan.name}
+              key={plan.id}
               className={`rounded-xl border p-8 transition ${
                 plan.highlighted
                   ? "border-accent bg-accent-light shadow-lg shadow-accent/10"
                   : "border-border bg-background-card hover:border-border-hover"
               }`}
             >
-              <h3 className="text-xl font-semibold text-foreground">
-                {plan.name}
-              </h3>
-              <p className="mt-2 text-3xl font-bold text-foreground">
-                {plan.price}
-              </p>
+              <h3 className="text-xl font-semibold text-foreground">{plan.name}</h3>
+              <p className="mt-2 text-3xl font-bold text-foreground">{plan.price}</p>
               <ul className="mt-6 space-y-3">
-                {plan.features.map((f) => (
+                {plan.previewFeatures.map((feature) => (
                   <li
-                    key={f}
+                    key={feature}
                     className="flex items-center gap-2 text-sm text-foreground-secondary"
                   >
                     <Check className="h-4 w-4 shrink-0 text-success" />
-                    {f}
+                    {feature}
                   </li>
                 ))}
               </ul>
@@ -511,8 +454,6 @@ function PricingSection() {
   );
 }
 
-/* ───────────────── Compatibility ───────────────── */
-
 function CompatibilitySection() {
   return (
     <section className="py-20">
@@ -523,8 +464,8 @@ function CompatibilitySection() {
           </h2>
           <p className="mx-auto mt-4 max-w-2xl text-foreground-secondary">
             Мод работает с большинством визуальных новелл на движке Ren&apos;Py
-            версии 7 и 8. Мы постоянно тестируем совместимость и расширяем
-            список поддерживаемых игр.
+            7 и 8. Список проверенных игр и их статус есть на отдельной
+            странице.
           </p>
           <Link
             href="/compatibility"
@@ -539,48 +480,27 @@ function CompatibilitySection() {
   );
 }
 
-/* ───────────────── FAQ (server wrapper) ───────────────── */
-
 const faqItems = [
   {
     question: "Мод бесплатный?",
-    answer:
-      "Да, мод можно скачать и использовать бесплатно. Бесплатный тариф включает 50 переводов в день и сохранение до 100 слов. Для расширенных возможностей доступны платные тарифы.",
+    answer: `Да. ${freePlanSummary()} Для расширенных возможностей доступны платные тарифы.`,
   },
   {
     question: "Как установить мод?",
-    answer:
-      "Скачайте архив с модом, распакуйте его и скопируйте файлы в папку game вашей визуальной новеллы. При следующем запуске игры мод активируется автоматически.",
+    answer: activationFlowSummary(),
   },
   {
-    question: "С какими новеллами совместим мод?",
+    question: "Нужен ли интернет для работы?",
     answer:
-      "Мод совместим с большинством визуальных новелл на движке Ren'Py версий 7 и 8. Полный список протестированных игр доступен на странице совместимости.",
-  },
-  {
-    question: "Нужен ли интернет для работы мода?",
-    answer:
-      "Для перевода новых слов нужен интернет. Однако уже переведённые слова кэшируются локально и доступны без подключения.",
-  },
-  {
-    question: "Как работает синхронизация с личным кабинетом?",
-    answer:
-      "Все сохранённые слова и фразы автоматически синхронизируются с вашим аккаунтом на сайте. Вы можете повторять их в личном кабинете с любого устройства.",
+      "Для новых переводов нужен интернет. Уже полученные переводы мод может взять из локального кэша.",
   },
   {
     question: "Можно ли использовать мод на нескольких компьютерах?",
-    answer:
-      "Да, количество устройств зависит от тарифа: 1 устройство на бесплатном, 3 — на базовом и 5 — на расширенном тарифе.",
+    answer: `${deviceLimitSummary()} Привязанными устройствами можно управлять в кабинете.`,
   },
   {
-    question: "Мод влияет на производительность игры?",
-    answer:
-      "Мод минимально влияет на производительность. Перевод запрашивается только по клику, а локальный кэш ускоряет повторные запросы.",
-  },
-  {
-    question: "Как отменить подписку?",
-    answer:
-      "Вы можете отменить подписку в любое время в личном кабинете в разделе «Лимиты и тариф». После отмены доступ к платным функциям сохраняется до конца оплаченного периода.",
+    question: "Чем отличаются платные тарифы?",
+    answer: paidPlansSummary(),
   },
 ];
 
@@ -592,7 +512,7 @@ function FAQSection() {
           Частые вопросы
         </h2>
         <p className="mx-auto mt-4 max-w-2xl text-center text-foreground-secondary">
-          Ответы на самые популярные вопросы о сервисе
+          Коротко о тарифах, установке и синхронизации
         </p>
 
         <div className="mx-auto mt-14 max-w-3xl">
@@ -602,8 +522,6 @@ function FAQSection() {
     </section>
   );
 }
-
-/* ───────────────── Page ───────────────── */
 
 export default function HomePage() {
   return (

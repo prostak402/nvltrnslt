@@ -4,196 +4,309 @@ import { useState } from "react";
 import {
   ChevronDown,
   ChevronUp,
-  MessageSquare,
-  AlertTriangle,
-  Send,
-  HelpCircle,
   ExternalLink,
+  HelpCircle,
+  MessageSquare,
+  Send,
 } from "lucide-react";
-import { Card } from "@/components/ui/Card";
+
 import { Badge } from "@/components/ui/Badge";
+import { Card } from "@/components/ui/Card";
+import {
+  apiSend,
+  getApiFieldError,
+  isApiError,
+  useApiData,
+} from "@/lib/client/api";
+import {
+  supportCategoryLabels,
+  ticketStatusMeta,
+} from "@/lib/client/presentation";
+import type { DashboardSupportResponse } from "@/lib/contracts/dashboard";
 
-const faqItems = [
-  {
-    q: "Мод не подключается к серверу",
-    a: "Убедитесь, что у вас стабильное интернет-соединение. Проверьте правильность введённого кода доступа. Если проблема сохраняется, попробуйте обновить код доступа в разделе \"Устройства\" и ввести его заново.",
-  },
-  {
-    q: "Слова не появляются в кабинете",
-    a: "Синхронизация может занять до минуты. Убедитесь, что автосинхронизация включена в настройках. Попробуйте сохранить ещё одно слово — это запустит повторную синхронизацию.",
-  },
-  {
-    q: "Как восстановить удалённое слово",
-    a: "К сожалению, удалённые слова нельзя восстановить. Вы можете снова сохранить это слово из игры при следующей встрече.",
-  },
-  {
-    q: "Перевод отображается некорректно",
-    a: "Переводы предоставляются автоматическим сервисом и могут содержать неточности. Вы можете добавить свою заметку к слову с правильным переводом.",
-  },
-  {
-    q: "Как отменить подписку",
-    a: "Перейдите в раздел \"Тариф и лимиты\" и нажмите \"Перейти на бесплатный тариф\". Ваши данные сохранятся, но лимиты будут уменьшены.",
-  },
-];
-
-const knownIssues = [
-  {
-    title: "Задержка синхронизации при большом количестве слов",
-    status: "В работе",
-    statusVariant: "warning" as const,
-    description: "При словаре более 500 слов синхронизация может занимать до 5 секунд. Оптимизация в процессе.",
-  },
-  {
-    title: "Некорректное отображение длинных фраз в моде",
-    status: "Исправлено в v1.2",
-    statusVariant: "success" as const,
-    description: "Фразы длиннее 100 символов обрезались при отображении. Исправлено в версии мода 1.2.",
-  },
-  {
-    title: "Мод не определяет версию Ren'Py 8.x автоматически",
-    status: "Планируется",
-    statusVariant: "default" as const,
-    description: "На данный момент определение версии Ren'Py 8.x требует ручной настройки. Автоопределение будет добавлено в следующем обновлении.",
-  },
-];
+const initialData: DashboardSupportResponse = {
+  faqItems: [],
+  tickets: [],
+};
 
 export default function SupportPage() {
+  const { data, loading, error, reload } = useApiData<DashboardSupportResponse>(
+    "/api/dashboard/support",
+    initialData,
+  );
   const [openFaq, setOpenFaq] = useState<number | null>(null);
   const [subject, setSubject] = useState("");
+  const [category, setCategory] =
+    useState<keyof typeof supportCategoryLabels>("mod");
   const [message, setMessage] = useState("");
-  const [sent, setSent] = useState(false);
+  const [formErrors, setFormErrors] = useState<{
+    subject?: string;
+    category?: string;
+    message?: string;
+  }>({});
+  const [statusMessage, setStatusMessage] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSend = () => {
-    if (subject.trim() && message.trim()) {
-      setSent(true);
-      setTimeout(() => {
-        setSent(false);
-        setSubject("");
-        setMessage("");
-      }, 3000);
+  const handleSend = async () => {
+    if (!subject.trim() || !message.trim()) {
+      setStatusMessage("Заполните тему и сообщение.");
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      setStatusMessage("");
+      setFormErrors({});
+
+      await apiSend("/api/dashboard/support", "POST", {
+        subject: subject.trim(),
+        category,
+        message: message.trim(),
+      });
+
+      setSubject("");
+      setMessage("");
+      await reload();
+      setStatusMessage("Тикет создан. Он уже появился в списке ниже.");
+    } catch (requestError) {
+      if (isApiError(requestError)) {
+        const subjectError = getApiFieldError(requestError, "subject");
+        const categoryError = getApiFieldError(requestError, "category");
+        const messageError = getApiFieldError(requestError, "message");
+
+        setFormErrors({
+          subject: subjectError ?? undefined,
+          category: categoryError ?? undefined,
+          message: messageError ?? undefined,
+        });
+
+        if (!subjectError && !categoryError && !messageError) {
+          setStatusMessage(requestError.message);
+        }
+      } else {
+        setStatusMessage(
+          requestError instanceof Error
+            ? requestError.message
+            : "Не удалось создать тикет",
+        );
+      }
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   return (
     <div>
-      <h1 className="text-2xl font-bold mb-6">Поддержка</h1>
+      <h1 className="mb-6 text-2xl font-bold">Поддержка</h1>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Left column */}
+      {error ? (
+        <Card className="mb-6 border-danger/30 bg-danger/10 text-danger">
+          Не удалось загрузить раздел поддержки: {error}
+        </Card>
+      ) : null}
+
+      <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
         <div className="space-y-8">
-          {/* Quick FAQ */}
           <div>
-            <div className="flex items-center gap-2 mb-4">
-              <HelpCircle className="w-5 h-5 text-foreground-secondary" />
+            <div className="mb-4 flex items-center gap-2">
+              <HelpCircle className="h-5 w-5 text-foreground-secondary" />
               <h2 className="text-lg font-semibold">Быстрые ответы</h2>
             </div>
+
             <div className="space-y-2">
-              {faqItems.map((item, i) => (
+              {data.faqItems.map((item, index) => (
                 <div
-                  key={i}
-                  className="bg-background-card border border-border rounded-xl overflow-hidden"
+                  key={item.q}
+                  className="overflow-hidden rounded-xl border border-border bg-background-card"
                 >
                   <button
-                    onClick={() => setOpenFaq(openFaq === i ? null : i)}
-                    className="w-full flex items-center justify-between p-4 text-left hover:bg-background-hover transition-colors"
+                    type="button"
+                    onClick={() => setOpenFaq(openFaq === index ? null : index)}
+                    className="flex w-full items-center justify-between p-4 text-left transition-colors hover:bg-background-hover"
                   >
-                    <span className="font-medium text-sm">{item.q}</span>
-                    {openFaq === i ? (
-                      <ChevronUp className="w-4 h-4 text-foreground-muted flex-shrink-0" />
+                    <span className="text-sm font-medium">{item.q}</span>
+                    {openFaq === index ? (
+                      <ChevronUp className="h-4 w-4 flex-shrink-0 text-foreground-muted" />
                     ) : (
-                      <ChevronDown className="w-4 h-4 text-foreground-muted flex-shrink-0" />
+                      <ChevronDown className="h-4 w-4 flex-shrink-0 text-foreground-muted" />
                     )}
                   </button>
-                  {openFaq === i && (
+
+                  {openFaq === index ? (
                     <div className="px-4 pb-4">
-                      <p className="text-sm text-foreground-secondary leading-relaxed">{item.a}</p>
+                      <p className="text-sm leading-relaxed text-foreground-secondary">
+                        {item.a}
+                      </p>
                     </div>
-                  )}
+                  ) : null}
                 </div>
               ))}
             </div>
+
             <a
               href="/faq"
-              className="inline-flex items-center gap-1.5 text-sm text-accent hover:text-accent-hover mt-3 transition-colors"
+              className="mt-3 inline-flex items-center gap-1.5 text-sm text-accent transition-colors hover:text-accent-hover"
             >
-              Все вопросы и ответы <ExternalLink className="w-3.5 h-3.5" />
+              Все вопросы и ответы <ExternalLink className="h-3.5 w-3.5" />
             </a>
-          </div>
-
-          {/* Known Issues */}
-          <div>
-            <div className="flex items-center gap-2 mb-4">
-              <AlertTriangle className="w-5 h-5 text-foreground-secondary" />
-              <h2 className="text-lg font-semibold">Известные проблемы</h2>
-            </div>
-            <div className="space-y-3">
-              {knownIssues.map((issue, i) => (
-                <Card key={i}>
-                  <div className="flex items-start justify-between gap-3 mb-2">
-                    <h3 className="font-medium text-sm">{issue.title}</h3>
-                    <Badge variant={issue.statusVariant}>{issue.status}</Badge>
-                  </div>
-                  <p className="text-sm text-foreground-muted">{issue.description}</p>
-                </Card>
-              ))}
-            </div>
           </div>
         </div>
 
-        {/* Right column - Contact form */}
-        <div>
-          <div className="flex items-center gap-2 mb-4">
-            <MessageSquare className="w-5 h-5 text-foreground-secondary" />
-            <h2 className="text-lg font-semibold">Написать в поддержку</h2>
-          </div>
-          <Card>
-            {sent ? (
-              <div className="text-center py-8">
-                <div className="w-12 h-12 bg-success/15 rounded-full flex items-center justify-center mx-auto mb-3">
-                  <Send className="w-5 h-5 text-success" />
-                </div>
-                <h3 className="font-semibold mb-1">Сообщение отправлено</h3>
-                <p className="text-sm text-foreground-secondary">Мы ответим в течение 24 часов на вашу почту.</p>
-              </div>
-            ) : (
+        <div className="space-y-8">
+          <div>
+            <div className="mb-4 flex items-center gap-2">
+              <MessageSquare className="h-5 w-5 text-foreground-secondary" />
+              <h2 className="text-lg font-semibold">Написать в поддержку</h2>
+            </div>
+
+            <Card>
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm text-foreground-secondary mb-1.5">Тема</label>
-                  <select
+                  <label className="mb-1.5 block text-sm text-foreground-secondary">
+                    Тема
+                  </label>
+                  <input
                     value={subject}
-                    onChange={(e) => setSubject(e.target.value)}
-                    className="w-full px-4 py-2.5 bg-background-hover border border-border rounded-lg text-foreground appearance-none cursor-pointer focus:outline-none focus:border-accent"
-                  >
-                    <option value="">Выберите тему</option>
-                    <option value="mod">Проблема с модом</option>
-                    <option value="sync">Проблема с синхронизацией</option>
-                    <option value="account">Проблема с аккаунтом</option>
-                    <option value="payment">Вопрос об оплате</option>
-                    <option value="feature">Предложение по функции</option>
-                    <option value="other">Другое</option>
-                  </select>
+                    onChange={(event) => setSubject(event.target.value)}
+                    className={`w-full rounded-lg border bg-background-hover px-4 py-2.5 text-foreground focus:border-accent focus:outline-none ${
+                      formErrors.subject ? "border-danger" : "border-border"
+                    }`}
+                    placeholder="Например: мод не проходит авторизацию"
+                  />
+                  {formErrors.subject ? (
+                    <p className="mt-1 text-sm text-danger">
+                      {formErrors.subject}
+                    </p>
+                  ) : null}
                 </div>
+
                 <div>
-                  <label className="block text-sm text-foreground-secondary mb-1.5">Сообщение</label>
+                  <label className="mb-1.5 block text-sm text-foreground-secondary">
+                    Категория
+                  </label>
+                  <select
+                    value={category}
+                    onChange={(event) =>
+                      setCategory(
+                        event.target.value as keyof typeof supportCategoryLabels,
+                      )
+                    }
+                    className={`w-full cursor-pointer appearance-none rounded-lg border bg-background-hover px-4 py-2.5 text-foreground focus:border-accent focus:outline-none ${
+                      formErrors.category ? "border-danger" : "border-border"
+                    }`}
+                  >
+                    {Object.entries(supportCategoryLabels).map(
+                      ([value, label]) => (
+                        <option key={value} value={value}>
+                          {label}
+                        </option>
+                      ),
+                    )}
+                  </select>
+                  {formErrors.category ? (
+                    <p className="mt-1 text-sm text-danger">
+                      {formErrors.category}
+                    </p>
+                  ) : null}
+                </div>
+
+                <div>
+                  <label className="mb-1.5 block text-sm text-foreground-secondary">
+                    Сообщение
+                  </label>
                   <textarea
                     value={message}
-                    onChange={(e) => setMessage(e.target.value)}
+                    onChange={(event) => setMessage(event.target.value)}
                     rows={6}
-                    placeholder="Опишите вашу проблему или вопрос..."
-                    className="w-full px-4 py-2.5 bg-background-hover border border-border rounded-lg text-foreground placeholder:text-foreground-muted resize-none focus:outline-none focus:border-accent"
+                    placeholder="Опишите проблему, шаги воспроизведения и что вы уже попробовали."
+                    className={`w-full resize-none rounded-lg border bg-background-hover px-4 py-2.5 text-foreground placeholder:text-foreground-muted focus:border-accent focus:outline-none ${
+                      formErrors.message ? "border-danger" : "border-border"
+                    }`}
                   />
+                  {formErrors.message ? (
+                    <p className="mt-1 text-sm text-danger">
+                      {formErrors.message}
+                    </p>
+                  ) : null}
                 </div>
+
+                {statusMessage ? (
+                  <p className="text-sm text-foreground-secondary">
+                    {statusMessage}
+                  </p>
+                ) : null}
+
                 <button
-                  onClick={handleSend}
-                  disabled={!subject || !message.trim()}
-                  className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-accent hover:bg-accent-hover disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
+                  type="button"
+                  onClick={() => void handleSend()}
+                  disabled={isSubmitting}
+                  className="flex w-full items-center justify-center gap-2 rounded-lg bg-accent px-4 py-2.5 text-white transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-40"
                 >
-                  <Send className="w-4 h-4" />
-                  Отправить
+                  <Send className="h-4 w-4" />
+                  {isSubmitting ? "Отправляем..." : "Отправить"}
                 </button>
               </div>
-            )}
-          </Card>
+            </Card>
+          </div>
+
+          <div>
+            <div className="mb-4 flex items-center gap-2">
+              <MessageSquare className="h-5 w-5 text-foreground-secondary" />
+              <h2 className="text-lg font-semibold">Мои тикеты</h2>
+            </div>
+
+            <div className="space-y-3">
+              {data.tickets.map((ticket) => {
+                const badge = ticketStatusMeta[ticket.status];
+
+                return (
+                  <Card key={ticket.id}>
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="font-medium text-foreground">
+                          {ticket.subject}
+                        </p>
+                        <p className="mt-1 text-xs text-foreground-muted">
+                          {supportCategoryLabels[ticket.category]} · обновлён{" "}
+                          {ticket.updatedAtLabel}
+                        </p>
+                      </div>
+                      <Badge variant={badge.variant}>{badge.label}</Badge>
+                    </div>
+
+                    <div className="mt-4 space-y-3">
+                      {ticket.messages.map((entry) => (
+                        <div
+                          key={entry.id}
+                          className="rounded-lg bg-background-hover px-4 py-3"
+                        >
+                          <div className="flex items-center justify-between gap-3">
+                            <p className="text-sm font-medium text-foreground">
+                              {entry.authorName}
+                            </p>
+                            <span className="text-xs text-foreground-muted">
+                              {new Date(entry.createdAt).toLocaleString("ru-RU")}
+                            </span>
+                          </div>
+                          <p className="mt-2 whitespace-pre-wrap text-sm text-foreground-secondary">
+                            {entry.text}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </Card>
+                );
+              })}
+
+              {!loading && data.tickets.length === 0 ? (
+                <Card>
+                  <p className="text-sm text-foreground-muted">
+                    У вас пока нет открытых тикетов.
+                  </p>
+                </Card>
+              ) : null}
+            </div>
+          </div>
         </div>
       </div>
     </div>

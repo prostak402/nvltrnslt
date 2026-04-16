@@ -32,6 +32,8 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!/.env.example
+!/.env.production.example
 
 # vercel
 .vercel
@@ -39,3 +41,18 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# release artifacts
+release/packages/*.zip
+
+# local temp and desktop metadata
+/.tmp/
+/.vs/
+dev-*.log
+dev-*.err
+tmp-cookies.txt
+tmp-login.json
+
+# runtime data
+/data/
+/backups/

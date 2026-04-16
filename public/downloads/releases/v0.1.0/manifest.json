@@ -1,0 +1,14 @@
+﻿{
+    "name":  "NVLingo Ren\u0027Py Mod",
+    "version":  "0.1.0",
+    "packageFile":  "nvl-translate-mod-v0.1.0.zip",
+    "defaultApiBaseUrl":  "https://213.159.209.216",
+    "generatedAtUtc":  "2026-04-16T18:08:31.3794388Z",
+    "files":  [
+                  "00_lexmod_FIXED.rpy",
+                  "INSTALL.txt",
+                  "README.txt",
+                  "RELEASE_NOTES.txt",
+                  "manifest.json"
+              ]
+}

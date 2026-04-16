@@ -1,89 +1,62 @@
 import {
-  Download,
-  Monitor,
+  AlertTriangle,
   Apple,
-  Terminal,
+  Download,
   FolderOpen,
   Gamepad2,
-  KeyRound,
-  CheckCircle,
-  AlertTriangle,
   HelpCircle,
+  KeyRound,
+  Laptop,
   MessageCircle,
+  Monitor,
   RefreshCw,
-  Clock,
+  Terminal,
 } from "lucide-react";
 
+import { ACTIVATION_KEY_FILE, MOD_DOWNLOAD_PATH, MOD_VERSION } from "@/lib/config";
+import { modDesktopSupportSummary } from "@/lib/product";
+
 export const metadata = {
-  title: "Скачать мод — NVL Translate",
+  title: "Скачать мод — NVLingo",
 };
 
-const platforms = [
+const desktopPlatforms = [
   {
     name: "Windows",
     icon: Monitor,
-    available: true,
-    version: "v1.0.2",
-    size: "12 МБ",
-    description: "Windows 10 / 11 (64-bit)",
   },
   {
     name: "Linux",
     icon: Terminal,
-    available: false,
-    description: "Скоро появится",
   },
   {
     name: "macOS",
     icon: Apple,
-    available: false,
-    description: "Скоро появится",
   },
-];
+] as const;
 
 const installSteps = [
   {
     icon: Download,
     title: "Скачайте архив",
-    description: "Нажмите кнопку «Скачать» выше и сохраните ZIP-архив на компьютер.",
+    description: "Сохраните zip-архив с релизом мода на компьютер.",
   },
   {
     icon: FolderOpen,
-    title: "Распакуйте файлы",
+    title: "Распакуйте в папку game/",
     description:
-      "Откройте архив и скопируйте все файлы из него в папку game/ вашей визуальной новеллы на Ren'Py.",
+      "Скопируйте файлы мода в папку game/ вашей визуальной новеллы на Ren'Py.",
+  },
+  {
+    icon: KeyRound,
+    title: "Скачайте файл активации",
+    description: `Скачайте ${ACTIVATION_KEY_FILE} в кабинете и положите его в ту же папку game/.`,
   },
   {
     icon: Gamepad2,
     title: "Запустите игру",
     description:
-      "Откройте визуальную новеллу. Мод инициализируется автоматически при старте — вы увидите значок NVL Translate в углу экрана.",
-  },
-];
-
-const afterInstall = [
-  {
-    icon: Gamepad2,
-    title: "Откройте игру",
-    description: "Запустите визуальную новеллу с установленным модом.",
-  },
-  {
-    icon: KeyRound,
-    title: "Откройте меню мода",
-    description:
-      "Нажмите на значок NVL Translate или используйте горячую клавишу для открытия панели мода.",
-  },
-  {
-    icon: KeyRound,
-    title: "Введите код доступа",
-    description:
-      "Скопируйте код из личного кабинета на сайте и вставьте его в поле «Код доступа» в меню мода.",
-  },
-  {
-    icon: CheckCircle,
-    title: "Подтвердите подключение",
-    description:
-      "Дождитесь зелёного индикатора — соединение установлено. Теперь можно переводить слова прямо в игре!",
+      "Мод сам прочитает ключ-файл, активируется и подключит аккаунт.",
   },
 ];
 
@@ -92,133 +65,131 @@ const troubleshooting = [
     icon: RefreshCw,
     title: "Проверьте версию игры",
     description:
-      "Убедитесь, что ваша визуальная новелла работает на Ren'Py версии 7.x или 8.x. Более старые версии не поддерживаются.",
+      "Рекомендуются Ren'Py 7.x и 8.x. На нестандартных сборках возможны ограничения.",
   },
   {
     icon: AlertTriangle,
     title: "Проверьте совместимость",
     description:
-      "Некоторые новеллы с нестандартным интерфейсом могут работать некорректно. Проверьте список совместимых игр на странице совместимости.",
+      "Если у игры кастомный интерфейс или необычная сборка, сначала загляните на страницу совместимости.",
   },
   {
     icon: HelpCircle,
-    title: "Откройте раздел помощи",
+    title: "Откройте F6",
     description:
-      "В меню мода есть встроенный раздел помощи с подробными инструкциями и диагностикой проблем.",
+      "Если мод не подтянул ключ автоматически, откройте окно мода через F6 и проверьте настройки синхронизации.",
   },
   {
     icon: MessageCircle,
-    title: "Свяжитесь с поддержкой",
+    title: "Обратитесь в поддержку",
     description:
-      "Если проблема не решается, напишите нам на support@nvltrnslt.com или в Discord-канал поддержки.",
+      "Если проблема повторяется, создайте тикет в кабинете NVLingo.",
   },
 ];
 
 export default function DownloadPage() {
   return (
-    <main className="min-h-screen py-16 px-4">
-      <div className="max-w-7xl mx-auto space-y-24">
-        {/* Header */}
-        <section className="text-center max-w-3xl mx-auto">
-          <div className="inline-flex items-center gap-2 bg-accent-light text-accent px-4 py-1.5 rounded-full text-sm font-medium mb-6">
-            <Download className="w-4 h-4" />
+    <main className="min-h-screen px-4 py-16">
+      <div className="mx-auto max-w-7xl space-y-24">
+        <section className="mx-auto max-w-3xl text-center">
+          <div className="mb-6 inline-flex items-center gap-2 rounded-full bg-accent-light px-4 py-1.5 text-sm font-medium text-accent">
+            <Download className="h-4 w-4" />
             Скачать
           </div>
-          <h1 className="text-4xl md:text-5xl font-bold text-foreground mb-6">
+          <h1 className="mb-6 text-4xl font-bold text-foreground md:text-5xl">
             Скачать мод
           </h1>
-          <p className="text-lg text-foreground-secondary leading-relaxed">
-            Установите мод NVL Translate для вашей визуальной новеллы на Ren&apos;Py
-            и начните учить английский прямо во время игры.
+          <p className="text-lg leading-relaxed text-foreground-secondary">
+            Установите NVLingo в вашу визуальную новеллу на Ren&apos;Py и
+            подключите её к сайту через постоянный ключ-файл. Лимиты и доступные
+            функции зависят от тарифа аккаунта.
           </p>
         </section>
 
-        {/* Platform Selection */}
         <section>
-          <h2 className="text-3xl font-bold text-foreground text-center mb-12">
-            Выберите платформу
+          <h2 className="mb-12 text-center text-3xl font-bold text-foreground">
+            Desktop-сборка
           </h2>
-          <div className="grid md:grid-cols-3 gap-6 max-w-4xl mx-auto">
-            {platforms.map((platform) => (
-              <div
-                key={platform.name}
-                className={`relative bg-background-card border rounded-2xl p-8 text-center flex flex-col items-center ${
-                  platform.available
-                    ? "border-accent shadow-[0_0_30px_rgba(108,92,231,0.15)]"
-                    : "border-border opacity-60"
-                }`}
-              >
-                {platform.available && (
-                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-accent text-white text-xs font-semibold px-4 py-1 rounded-full">
-                    Доступно
-                  </div>
-                )}
-                <div
-                  className={`w-16 h-16 rounded-2xl flex items-center justify-center mb-4 ${
-                    platform.available ? "bg-accent-light" : "bg-background-hover"
-                  }`}
-                >
-                  <platform.icon
-                    className={`w-8 h-8 ${
-                      platform.available ? "text-accent" : "text-foreground-muted"
-                    }`}
-                  />
-                </div>
-                <h3 className="text-xl font-semibold text-foreground mb-1">
-                  {platform.name}
-                </h3>
-                <p className="text-foreground-secondary text-sm mb-4">
-                  {platform.description}
-                </p>
-
-                {platform.available ? (
-                  <>
-                    <div className="flex items-center gap-3 text-xs text-foreground-muted mb-4">
-                      <span>{platform.version}</span>
-                      <span className="w-1 h-1 rounded-full bg-foreground-muted" />
-                      <span>{platform.size}</span>
-                    </div>
-                    <a
-                      href="#"
-                      className="w-full inline-flex items-center justify-center gap-2 bg-accent text-white py-3 px-6 rounded-xl font-medium transition-colors hover:bg-accent-hover"
-                    >
-                      <Download className="w-4 h-4" />
-                      Скачать
-                    </a>
-                  </>
-                ) : (
-                  <div className="flex items-center gap-2 text-foreground-muted text-sm mt-auto">
-                    <Clock className="w-4 h-4" />
-                    Скоро
-                  </div>
-                )}
+          <p className="mx-auto mb-12 max-w-2xl text-center text-foreground-secondary">
+            {modDesktopSupportSummary()} Внутри архива только файлы мода для папки
+            {" "}
+            <code className="rounded bg-background-hover px-1.5 py-0.5 text-xs text-accent-secondary">
+              game/
+            </code>
+            , поэтому отдельные сборки по ОС сейчас не нужны.
+          </p>
+          <div className="mx-auto max-w-4xl">
+            <div className="relative rounded-2xl border border-accent bg-background-card p-8 shadow-[0_0_30px_rgba(108,92,231,0.15)]">
+              <div className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-accent px-4 py-1 text-xs font-semibold text-white">
+                Доступно сейчас
               </div>
-            ))}
+
+              <div className="flex flex-col gap-8 md:flex-row md:items-center md:justify-between">
+                <div className="text-center md:text-left">
+                  <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-accent-light md:mx-0">
+                    <Laptop className="h-8 w-8 text-accent" />
+                  </div>
+                  <h3 className="text-2xl font-semibold text-foreground">
+                    Универсальный desktop-архив
+                  </h3>
+                  <p className="mt-2 max-w-2xl text-sm text-foreground-secondary">
+                    {modDesktopSupportSummary()}
+                  </p>
+
+                  <div className="mt-5 flex flex-wrap justify-center gap-2 md:justify-start">
+                    {desktopPlatforms.map((platform) => (
+                      <div
+                        key={platform.name}
+                        className="inline-flex items-center gap-2 rounded-full border border-border bg-background-hover px-3 py-1.5 text-sm text-foreground"
+                      >
+                        <platform.icon className="h-4 w-4 text-accent" />
+                        {platform.name}
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="mt-5 flex flex-wrap items-center justify-center gap-3 text-xs text-foreground-muted md:justify-start">
+                    <span>{`v${MOD_VERSION}`}</span>
+                    <span className="h-1 w-1 rounded-full bg-foreground-muted" />
+                    <span>zip-архив</span>
+                    <span className="h-1 w-1 rounded-full bg-foreground-muted" />
+                    <span>файлы для папки game/</span>
+                  </div>
+                </div>
+
+                <a
+                  href={MOD_DOWNLOAD_PATH}
+                  className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-accent px-6 py-3 font-medium text-white transition-colors hover:bg-accent-hover"
+                >
+                  <Download className="h-4 w-4" />
+                  Скачать архив
+                </a>
+              </div>
+            </div>
           </div>
         </section>
 
-        {/* Installation Steps */}
         <section>
-          <h2 className="text-3xl font-bold text-foreground text-center mb-4">
+          <h2 className="mb-4 text-center text-3xl font-bold text-foreground">
             Установка мода
           </h2>
-          <p className="text-foreground-secondary text-center mb-12 max-w-2xl mx-auto">
-            Три простых шага для установки мода в вашу визуальную новеллу.
+          <p className="mx-auto mb-12 max-w-2xl text-center text-foreground-secondary">
+            Четыре шага, чтобы связать мод, игру и ваш аккаунт.
           </p>
-          <div className="grid gap-6 max-w-3xl mx-auto">
+          <div className="mx-auto grid max-w-3xl gap-6">
             {installSteps.map((step, index) => (
               <div
-                key={index}
-                className="flex items-start gap-5 bg-background-card border border-border rounded-xl p-6 hover:border-border-hover transition-colors"
+                key={step.title}
+                className="flex items-start gap-5 rounded-xl border border-border bg-background-card p-6 transition-colors hover:border-border-hover"
               >
-                <div className="flex-shrink-0 w-12 h-12 bg-accent-light rounded-xl flex items-center justify-center relative">
-                  <step.icon className="w-5 h-5 text-accent" />
-                  <span className="absolute -top-2 -left-2 w-6 h-6 bg-accent text-white text-xs font-bold rounded-full flex items-center justify-center">
+                <div className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-accent-light">
+                  <step.icon className="h-5 w-5 text-accent" />
+                  <span className="absolute -left-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full bg-accent text-xs font-bold text-white">
                     {index + 1}
                   </span>
                 </div>
                 <div>
-                  <h3 className="text-lg font-semibold text-foreground mb-1">
+                  <h3 className="mb-1 text-lg font-semibold text-foreground">
                     {step.title}
                   </h3>
                   <p className="text-foreground-secondary">{step.description}</p>
@@ -228,57 +199,25 @@ export default function DownloadPage() {
           </div>
         </section>
 
-        {/* After Installation */}
         <section>
-          <h2 className="text-3xl font-bold text-foreground text-center mb-4">
-            После установки
-          </h2>
-          <p className="text-foreground-secondary text-center mb-12 max-w-2xl mx-auto">
-            Подключите мод к вашему аккаунту для синхронизации словаря.
-          </p>
-          <div className="grid sm:grid-cols-2 gap-6 max-w-4xl mx-auto">
-            {afterInstall.map((step, index) => (
-              <div
-                key={index}
-                className="flex items-start gap-4 bg-background-card border border-border rounded-xl p-6 hover:border-border-hover transition-colors"
-              >
-                <div className="flex-shrink-0 w-10 h-10 bg-accent-secondary-light rounded-lg flex items-center justify-center relative">
-                  <step.icon className="w-5 h-5 text-accent-secondary" />
-                  <span className="absolute -top-2 -left-2 w-5 h-5 bg-accent-secondary text-white text-[10px] font-bold rounded-full flex items-center justify-center">
-                    {index + 1}
-                  </span>
-                </div>
-                <div>
-                  <h3 className="text-base font-semibold text-foreground mb-1">
-                    {step.title}
-                  </h3>
-                  <p className="text-foreground-secondary text-sm">{step.description}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        {/* Troubleshooting */}
-        <section>
-          <div className="bg-background-card border border-border rounded-2xl p-8 md:p-12">
-            <div className="flex items-center justify-center gap-3 mb-8">
-              <AlertTriangle className="w-6 h-6 text-warning" />
+          <div className="rounded-2xl border border-border bg-background-card p-8 md:p-12">
+            <div className="mb-8 flex items-center justify-center gap-3">
+              <AlertTriangle className="h-6 w-6 text-warning" />
               <h2 className="text-2xl font-bold text-foreground">
                 Если что-то не работает
               </h2>
             </div>
-            <div className="grid sm:grid-cols-2 gap-6">
-              {troubleshooting.map((item, index) => (
-                <div key={index} className="flex items-start gap-4">
-                  <div className="flex-shrink-0 w-10 h-10 bg-background-hover rounded-lg flex items-center justify-center">
-                    <item.icon className="w-5 h-5 text-warning" />
+            <div className="grid gap-6 sm:grid-cols-2">
+              {troubleshooting.map((item) => (
+                <div key={item.title} className="flex items-start gap-4">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-background-hover">
+                    <item.icon className="h-5 w-5 text-warning" />
                   </div>
                   <div>
-                    <h3 className="text-base font-semibold text-foreground mb-1">
+                    <h3 className="mb-1 text-base font-semibold text-foreground">
                       {item.title}
                     </h3>
-                    <p className="text-foreground-secondary text-sm">
+                    <p className="text-sm text-foreground-secondary">
                       {item.description}
                     </p>
                   </div>

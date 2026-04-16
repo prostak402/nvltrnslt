@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: nvltrnslt
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d nvltrnslt"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      AUTH_SECRET: ci-auth-secret-at-least-32-characters-long
+      DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/nvltrnslt
+      BOOTSTRAP_ADMIN_NAME: CI Admin
+      BOOTSTRAP_ADMIN_EMAIL: ci-admin@example.com
+      BOOTSTRAP_ADMIN_PASSWORD: ci-bootstrap-password-123
+      YANDEX_TRANSLATE_API_KEY: ""
+      YANDEX_TRANSLATE_FOLDER_ID: ""
+      TRANSLATION_TIMEOUT_MS: "8000"
+      TRANSLATION_MAX_RETRIES: "2"
+      TRANSLATION_RETRY_DELAY_MS: "400"
+      TRANSLATION_DEGRADED_MODE: fallback
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      - name: Validate Drizzle artifacts
+        run: npm run db:check

@@ -17,6 +17,8 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
+import { initials } from "@/lib/client/presentation";
+
 type NavItem = {
   label: string;
   href: string;
@@ -37,9 +39,14 @@ const navItems: NavItem[] = [
 type AdminSidebarProps = {
   open: boolean;
   onClose: () => void;
+  user?: {
+    name: string;
+    email: string;
+  } | null;
+  onLogout?: () => void;
 };
 
-export function AdminSidebar({ open, onClose }: AdminSidebarProps) {
+export function AdminSidebar({ open, onClose, user, onLogout }: AdminSidebarProps) {
   const pathname = usePathname();
 
   const isActive = (href: string) => {
@@ -79,7 +86,7 @@ export function AdminSidebar({ open, onClose }: AdminSidebarProps) {
             >
               <item.icon className="w-5 h-5 shrink-0" />
               {item.label}
-              {active && <ChevronRight className="w-4 h-4 ml-auto" />}
+              {active ? <ChevronRight className="w-4 h-4 ml-auto" /> : null}
             </Link>
           );
         })}
@@ -96,13 +103,22 @@ export function AdminSidebar({ open, onClose }: AdminSidebarProps) {
         <div className="mt-3 bg-background-hover rounded-lg p-3">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-full bg-danger-light flex items-center justify-center text-danger text-sm font-bold">
-              A
+              {user ? initials(user.name) : "A"}
             </div>
             <div className="min-w-0">
-              <p className="text-sm font-medium text-foreground truncate">Администратор</p>
-              <span className="text-xs text-foreground-muted">admin@nvltranslate.com</span>
+              <p className="text-sm font-medium text-foreground truncate">{user?.name ?? "Администратор"}</p>
+              <span className="text-xs text-foreground-muted">{user?.email ?? "admin@nvltranslate.com"}</span>
             </div>
           </div>
+          {onLogout ? (
+            <button
+              type="button"
+              onClick={onLogout}
+              className="mt-3 block text-xs text-foreground-secondary hover:text-foreground transition-colors"
+            >
+              Выйти
+            </button>
+          ) : null}
         </div>
       </div>
     </>
@@ -110,12 +126,7 @@ export function AdminSidebar({ open, onClose }: AdminSidebarProps) {
 
   return (
     <>
-      {open && (
-        <div
-          className="fixed inset-0 z-40 bg-black/50 lg:hidden"
-          onClick={onClose}
-        />
-      )}
+      {open ? <div className="fixed inset-0 z-40 bg-black/50 lg:hidden" onClick={onClose} /> : null}
       <aside
         className={`fixed top-0 left-0 z-50 h-full w-64 bg-background-secondary border-r border-border flex flex-col transition-transform duration-300 lg:translate-x-0 lg:static lg:z-auto ${
           open ? "translate-x-0" : "-translate-x-full"

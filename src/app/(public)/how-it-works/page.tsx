@@ -21,35 +21,41 @@ import {
   X,
 } from "lucide-react";
 
+import { ACTIVATION_KEY_FILE } from "@/lib/config";
+import { planComparisonRows } from "@/lib/product";
+
 export const metadata = {
-  title: "Как это работает — NVL Translate",
+  title: "Как это работает — NVLingo",
 };
 
 const steps = [
   {
     icon: Download,
     title: "Скачайте мод",
-    description: "Загрузите мод NVL Translate для вашей платформы со страницы загрузки.",
+    description: "Загрузите архив NVLingo со страницы загрузки.",
   },
   {
     icon: FolderOpen,
-    title: "Поместите в папку игры",
-    description: "Скопируйте файлы мода в папку game/ вашей визуальной новеллы на Ren'Py.",
-  },
-  {
-    icon: Gamepad2,
-    title: "Откройте игру",
-    description: "Запустите визуальную новеллу. Мод автоматически инициализируется при старте.",
+    title: "Поместите файлы в игру",
+    description:
+      "Скопируйте файлы мода в папку game/ вашей визуальной новеллы на Ren'Py.",
   },
   {
     icon: KeyRound,
-    title: "Введите код доступа",
-    description: "В меню мода введите код доступа из вашего личного кабинета на сайте.",
+    title: "Скачайте ключ-файл",
+    description: `Скачайте ${ACTIVATION_KEY_FILE} в кабинете и положите его в ту же папку game/.`,
+  },
+  {
+    icon: Gamepad2,
+    title: "Запустите игру",
+    description:
+      "При старте игры мод читает ключ-файл, активируется и подключает аккаунт автоматически.",
   },
   {
     icon: CheckCircle,
-    title: "Подтвердите подключение",
-    description: "Дождитесь подтверждения связи. Мод готов к работе — переводите прямо в игре!",
+    title: "Начните читать и сохранять",
+    description:
+      "Переводите слова и фразы, сохраняйте карточки и повторяйте их уже в кабинете.",
   },
 ];
 
@@ -57,32 +63,38 @@ const gameFeatures = [
   {
     icon: Languages,
     title: "Перевод слова",
-    description: "Выделите незнакомое слово и мгновенно получите его перевод.",
+    description:
+      "Выделите незнакомое слово и сразу получите перевод в контексте сцены.",
   },
   {
     icon: MessageSquareText,
     title: "Перевод фразы",
-    description: "Переведите целую фразу или предложение для лучшего понимания контекста.",
+    description:
+      "Можно переводить не только отдельные слова, но и фразы целиком.",
   },
   {
     icon: Bookmark,
     title: "Сохранение слова",
-    description: "Добавьте слово в личный словарь одним нажатием для дальнейшего изучения.",
+    description:
+      "Добавьте слово в словарь одним нажатием для дальнейшего повторения.",
   },
   {
     icon: BookmarkPlus,
     title: "Сохранение фразы",
-    description: "Сохраните полезную фразу вместе с контекстом из игры.",
+    description:
+      "Сохраните полезную фразу вместе с контекстом из игры.",
   },
   {
     icon: History,
-    title: "Просмотр истории",
-    description: "Просматривайте историю всех ваших переводов прямо в меню мода.",
+    title: "История",
+    description:
+      "Недавние переводы и действия остаются доступны во время текущего чтения.",
   },
   {
     icon: HardDrive,
     title: "Локальный кэш",
-    description: "Ранее переведённые слова доступны мгновенно без повторного запроса.",
+    description:
+      "Ранее переведённые фрагменты открываются быстрее и без лишних запросов.",
   },
 ];
 
@@ -90,134 +102,92 @@ const siteFeatures = [
   {
     icon: Library,
     title: "Словарь",
-    description: "Все сохранённые слова с переводами, транскрипцией и примерами использования.",
+    description:
+      "Все сохранённые слова с переводом, заметками и примерами использования.",
   },
   {
     icon: ListChecks,
     title: "Фразы",
-    description: "Коллекция сохранённых фраз с контекстом из визуальных новелл.",
+    description:
+      "Отдельный список фраз с контекстом из визуальных новелл.",
   },
   {
     icon: Tag,
-    title: "Статусы",
-    description: "Отмечайте слова как «новое», «изучаю», «выучено» для отслеживания прогресса.",
+    title: "Статусы изучения",
+    description:
+      "Отмечайте слова как новые, сложные или выученные.",
   },
   {
     icon: Clock,
     title: "История",
-    description: "Полная история переводов с датами, источниками и контекстом.",
+    description:
+      "Хронология переводов и действий по аккаунту.",
   },
   {
     icon: TrendingUp,
     title: "Прогресс",
-    description: "Наглядная статистика: сколько слов выучено, ежедневная активность, цели.",
+    description:
+      "Статистика по повторам, активности и накоплению словаря.",
   },
   {
     icon: GraduationCap,
     title: "Обучение",
-    description: "Карточки, упражнения и тесты для закрепления выученных слов.",
+    description:
+      "Карточки и упражнения для закрепления слов, собранных в игре.",
   },
 ];
 
-const tiers = [
-  {
-    name: "Бесплатно",
-    price: "0 ₽",
-    features: {
-      "Переводов в день": "30–50",
-      "Словарь": "Ограниченный",
-      "Перевод слов": true,
-      "Перевод фраз": true,
-      "Синхронизация": true,
-      "История переводов": "Базовая",
-      "Карточки": "Базовые",
-      "Поиск и фильтры": false,
-      "Упражнения": false,
-      "Расширенная статистика": false,
-      "Авто-перевод предложений": false,
-      "Приоритетная обработка": false,
-    },
-  },
-  {
-    name: "Базовый",
-    price: "$4.99/мес",
-    features: {
-      "Переводов в день": "200",
-      "Словарь": "Полный",
-      "Перевод слов": true,
-      "Перевод фраз": true,
-      "Синхронизация": true,
-      "История переводов": "Полная",
-      "Карточки": "Расширенные",
-      "Поиск и фильтры": true,
-      "Упражнения": true,
-      "Расширенная статистика": false,
-      "Авто-перевод предложений": false,
-      "Приоритетная обработка": false,
-    },
-  },
-  {
-    name: "Расширенный",
-    price: "$9.99/мес",
-    features: {
-      "Переводов в день": "Безлимит",
-      "Словарь": "Полный",
-      "Перевод слов": true,
-      "Перевод фраз": true,
-      "Синхронизация": true,
-      "История переводов": "Полная",
-      "Карточки": "Все виды",
-      "Поиск и фильтры": true,
-      "Упражнения": true,
-      "Расширенная статистика": true,
-      "Авто-перевод предложений": true,
-      "Приоритетная обработка": true,
-    },
-  },
-];
+function CellValue({ value }: { value: boolean | string }) {
+  if (value === true) {
+    return <Check className="mx-auto h-5 w-5 text-success" />;
+  }
 
-const featureKeys = Object.keys(tiers[0].features);
+  if (value === false) {
+    return <X className="mx-auto h-5 w-5 text-foreground-muted" />;
+  }
+
+  return <span className="text-sm text-foreground">{value}</span>;
+}
 
 export default function HowItWorksPage() {
+  const comparisonRows = planComparisonRows();
+
   return (
-    <main className="min-h-screen py-16 px-4">
-      <div className="max-w-7xl mx-auto space-y-24">
-        {/* Section 1: Что это */}
-        <section className="text-center max-w-3xl mx-auto">
-          <div className="inline-flex items-center gap-2 bg-accent-light text-accent px-4 py-1.5 rounded-full text-sm font-medium mb-6">
-            <BookOpen className="w-4 h-4" />
+    <main className="min-h-screen px-4 py-16">
+      <div className="mx-auto max-w-7xl space-y-24">
+        <section className="mx-auto max-w-3xl text-center">
+          <div className="mb-6 inline-flex items-center gap-2 rounded-full bg-accent-light px-4 py-1.5 text-sm font-medium text-accent">
+            <BookOpen className="h-4 w-4" />
             О платформе
           </div>
-          <h1 className="text-4xl md:text-5xl font-bold text-foreground mb-6">
+          <h1 className="mb-6 text-4xl font-bold text-foreground md:text-5xl">
             Как это работает
           </h1>
-          <p className="text-lg text-foreground-secondary leading-relaxed">
-            NVL Translate — это платформа для изучения английского языка через визуальные новеллы.
-            Мод для Ren&apos;Py позволяет переводить слова и фразы прямо во время игры, сохранять их
-            в личный словарь и повторять на сайте с помощью карточек и упражнений. Всё синхронизируется
-            автоматически между игрой и вашим аккаунтом.
+          <p className="text-lg leading-relaxed text-foreground-secondary">
+            NVLingo связывает игру на Ren&apos;Py и ваш кабинет на сайте:
+            вы переводите и сохраняете материал в игре, а затем повторяете его
+            уже в словаре и карточках.
           </p>
         </section>
 
-        {/* Section 2: Как подключить */}
         <section>
-          <h2 className="text-3xl font-bold text-foreground text-center mb-12">
+          <h2 className="mb-12 text-center text-3xl font-bold text-foreground">
             Как подключить
           </h2>
           <div className="grid gap-6 md:gap-8">
             {steps.map((step, index) => (
               <div
-                key={index}
-                className="flex items-start gap-5 bg-background-card border border-border rounded-xl p-6 hover:border-border-hover transition-colors"
+                key={step.title}
+                className="flex items-start gap-5 rounded-xl border border-border bg-background-card p-6 transition-colors hover:border-border-hover"
               >
-                <div className="flex-shrink-0 w-12 h-12 bg-accent-light rounded-xl flex items-center justify-center relative">
-                  <step.icon className="w-5 h-5 text-accent" />
-                  <span className="absolute -top-2 -left-2 w-6 h-6 bg-accent text-white text-xs font-bold rounded-full flex items-center justify-center">
+                <div className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-accent-light">
+                  <step.icon className="h-5 w-5 text-accent" />
+                  <span className="absolute -left-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full bg-accent text-xs font-bold text-white">
                     {index + 1}
                   </span>
                 </div>
                 <div>
-                  <h3 className="text-lg font-semibold text-foreground mb-1">
+                  <h3 className="mb-1 text-lg font-semibold text-foreground">
                     {step.title}
                   </h3>
                   <p className="text-foreground-secondary">{step.description}</p>
@@ -227,27 +197,27 @@ export default function HowItWorksPage() {
           </div>
         </section>
 
-        {/* Section 3: Что можно делать в игре */}
         <section>
-          <h2 className="text-3xl font-bold text-foreground text-center mb-4">
+          <h2 className="mb-4 text-center text-3xl font-bold text-foreground">
             Что можно делать в игре
           </h2>
-          <p className="text-foreground-secondary text-center mb-12 max-w-2xl mx-auto">
-            Мод добавляет удобные инструменты перевода прямо в интерфейс визуальной новеллы.
+          <p className="mx-auto mb-12 max-w-2xl text-center text-foreground-secondary">
+            Мод добавляет перевод и сохранение слов прямо в интерфейс визуальной
+            новеллы.
           </p>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {gameFeatures.map((feature, index) => (
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {gameFeatures.map((feature) => (
               <div
-                key={index}
-                className="bg-background-card border border-border rounded-xl p-6 hover:border-border-hover transition-colors"
+                key={feature.title}
+                className="rounded-xl border border-border bg-background-card p-6 transition-colors hover:border-border-hover"
               >
-                <div className="w-10 h-10 bg-accent-secondary-light rounded-lg flex items-center justify-center mb-4">
-                  <feature.icon className="w-5 h-5 text-accent-secondary" />
+                <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-lg bg-accent-secondary-light">
+                  <feature.icon className="h-5 w-5 text-accent-secondary" />
                 </div>
-                <h3 className="text-lg font-semibold text-foreground mb-2">
+                <h3 className="mb-2 text-lg font-semibold text-foreground">
                   {feature.title}
                 </h3>
-                <p className="text-foreground-secondary text-sm">
+                <p className="text-sm text-foreground-secondary">
                   {feature.description}
                 </p>
               </div>
@@ -255,27 +225,27 @@ export default function HowItWorksPage() {
           </div>
         </section>
 
-        {/* Section 4: Что появляется на сайте */}
         <section>
-          <h2 className="text-3xl font-bold text-foreground text-center mb-4">
+          <h2 className="mb-4 text-center text-3xl font-bold text-foreground">
             Что появляется на сайте
           </h2>
-          <p className="text-foreground-secondary text-center mb-12 max-w-2xl mx-auto">
-            Все данные из игры автоматически синхронизируются с вашим аккаунтом на сайте.
+          <p className="mx-auto mb-12 max-w-2xl text-center text-foreground-secondary">
+            Все данные из игры автоматически оказываются в аккаунте и становятся
+            основой для повторения.
           </p>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {siteFeatures.map((feature, index) => (
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {siteFeatures.map((feature) => (
               <div
-                key={index}
-                className="bg-background-card border border-border rounded-xl p-6 hover:border-border-hover transition-colors"
+                key={feature.title}
+                className="rounded-xl border border-border bg-background-card p-6 transition-colors hover:border-border-hover"
               >
-                <div className="w-10 h-10 bg-accent-light rounded-lg flex items-center justify-center mb-4">
-                  <feature.icon className="w-5 h-5 text-accent" />
+                <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-lg bg-accent-light">
+                  <feature.icon className="h-5 w-5 text-accent" />
                 </div>
-                <h3 className="text-lg font-semibold text-foreground mb-2">
+                <h3 className="mb-2 text-lg font-semibold text-foreground">
                   {feature.title}
                 </h3>
-                <p className="text-foreground-secondary text-sm">
+                <p className="text-sm text-foreground-secondary">
                   {feature.description}
                 </p>
               </div>
@@ -283,52 +253,43 @@ export default function HowItWorksPage() {
           </div>
         </section>
 
-        {/* Section 5: Что даёт каждый тариф */}
         <section>
-          <h2 className="text-3xl font-bold text-foreground text-center mb-12">
+          <h2 className="mb-12 text-center text-3xl font-bold text-foreground">
             Что даёт каждый тариф
           </h2>
           <div className="overflow-x-auto">
             <table className="w-full border-collapse">
               <thead>
                 <tr>
-                  <th className="text-left text-foreground-secondary text-sm font-medium p-4 border-b border-border">
+                  <th className="border-b border-border p-4 text-left text-sm font-medium text-foreground-secondary">
                     Функция
                   </th>
-                  {tiers.map((tier) => (
-                    <th
-                      key={tier.name}
-                      className="text-center p-4 border-b border-border"
-                    >
-                      <div className="text-foreground font-semibold">{tier.name}</div>
-                      <div className="text-accent text-sm mt-1">{tier.price}</div>
-                    </th>
-                  ))}
+                  <th className="border-b border-border p-4 text-center text-sm font-medium text-foreground">
+                    Бесплатный
+                  </th>
+                  <th className="border-b border-border p-4 text-center text-sm font-medium text-accent">
+                    Базовый
+                  </th>
+                  <th className="border-b border-border p-4 text-center text-sm font-medium text-foreground">
+                    Расширенный
+                  </th>
                 </tr>
               </thead>
               <tbody>
-                {featureKeys.map((key) => (
-                  <tr key={key} className="hover:bg-background-hover transition-colors">
-                    <td className="text-foreground-secondary text-sm p-4 border-b border-border">
-                      {key}
+                {comparisonRows.map((row) => (
+                  <tr key={row.name} className="transition-colors hover:bg-background-hover">
+                    <td className="border-b border-border p-4 text-sm text-foreground-secondary">
+                      {row.name}
                     </td>
-                    {tiers.map((tier) => {
-                      const value = tier.features[key as keyof typeof tier.features];
-                      return (
-                        <td
-                          key={tier.name}
-                          className="text-center p-4 border-b border-border"
-                        >
-                          {value === true ? (
-                            <Check className="w-5 h-5 text-success mx-auto" />
-                          ) : value === false ? (
-                            <X className="w-5 h-5 text-foreground-muted mx-auto" />
-                          ) : (
-                            <span className="text-foreground text-sm">{value}</span>
-                          )}
-                        </td>
-                      );
-                    })}
+                    <td className="border-b border-border p-4 text-center">
+                      <CellValue value={row.free} />
+                    </td>
+                    <td className="border-b border-border p-4 text-center">
+                      <CellValue value={row.basic} />
+                    </td>
+                    <td className="border-b border-border p-4 text-center">
+                      <CellValue value={row.extended} />
+                    </td>
                   </tr>
                 ))}
               </tbody>

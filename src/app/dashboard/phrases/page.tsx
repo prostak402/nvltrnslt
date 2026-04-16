@@ -1,58 +1,93 @@
 "use client";
 
-import { useState } from "react";
-import { Search, Filter, BookOpen, ChevronDown, ChevronUp } from "lucide-react";
-import { Badge } from "@/components/ui/Badge";
+import { useMemo, useState } from "react";
+import { Search, Filter, BookOpen, ChevronDown, ChevronUp, MessageSquare, Trash2 } from "lucide-react";
 
-interface Phrase {
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import { apiSend, useApiData } from "@/lib/client/api";
+import { studyStatusMeta } from "@/lib/client/presentation";
+
+type PhraseRecord = {
   id: number;
-  original: string;
+  phrase: string;
   translation: string;
+  context: string;
+  contextTranslation: string;
   novel: string;
   date: string;
-  status: "saved" | "reviewing" | "learned";
-}
-
-const novels = [
-  "Все новеллы",
-  "Doki Doki Literature Club",
-  "Katawa Shoujo",
-  "Everlasting Summer",
-  "Clannad",
-  "Steins;Gate",
-];
-
-const statusConfig = {
-  saved: { label: "Сохранено", variant: "default" as const },
-  reviewing: { label: "В повторении", variant: "accent" as const },
-  learned: { label: "Изучено", variant: "success" as const },
+  relativeDate: string;
+  status: "new" | "hard" | "learned";
+  note: string;
+  repetitions: number;
 };
 
-const mockPhrases: Phrase[] = [
-  { id: 1, original: "I can't believe you would do something like that.", translation: "Я не могу поверить, что ты мог сделать что-то подобное.", novel: "Doki Doki Literature Club", date: "10.04.2026", status: "saved" },
-  { id: 2, original: "It's not like I had a choice in the matter.", translation: "Не то чтобы у меня был выбор в этом деле.", novel: "Katawa Shoujo", date: "10.04.2026", status: "reviewing" },
-  { id: 3, original: "The weight of the world rested on her shoulders.", translation: "Тяжесть всего мира лежала на её плечах.", novel: "Everlasting Summer", date: "09.04.2026", status: "saved" },
-  { id: 4, original: "Sometimes you have to let go of the things you love.", translation: "Иногда нужно отпускать то, что любишь.", novel: "Clannad", date: "09.04.2026", status: "learned" },
-  { id: 5, original: "The choice you make here will change everything.", translation: "Выбор, который ты сделаешь здесь, изменит всё.", novel: "Steins;Gate", date: "09.04.2026", status: "reviewing" },
-  { id: 6, original: "I never meant to hurt anyone.", translation: "Я никогда не хотел причинить кому-то боль.", novel: "Doki Doki Literature Club", date: "08.04.2026", status: "saved" },
-  { id: 7, original: "There's no turning back from this point.", translation: "С этого момента обратного пути нет.", novel: "Katawa Shoujo", date: "08.04.2026", status: "learned" },
-  { id: 8, original: "She looked at me as if I were a stranger.", translation: "Она посмотрела на меня так, будто я был незнакомцем.", novel: "Everlasting Summer", date: "07.04.2026", status: "saved" },
-  { id: 9, original: "I wonder if things could have been different.", translation: "Интересно, могло ли всё быть иначе.", novel: "Clannad", date: "07.04.2026", status: "reviewing" },
-  { id: 10, original: "This is the consequence of your actions.", translation: "Это последствия твоих действий.", novel: "Steins;Gate", date: "06.04.2026", status: "saved" },
-  { id: 11, original: "Don't pretend like nothing happened.", translation: "Не делай вид, что ничего не произошло.", novel: "Doki Doki Literature Club", date: "06.04.2026", status: "learned" },
-  { id: 12, original: "It took me a while to figure it out.", translation: "Мне потребовалось время, чтобы разобраться.", novel: "Katawa Shoujo", date: "05.04.2026", status: "saved" },
-];
+type PhrasesResponse = {
+  phrases: PhraseRecord[];
+  novels: string[];
+};
+
+const initialData: PhrasesResponse = {
+  phrases: [],
+  novels: ["Все новеллы"],
+};
 
 export default function PhrasesPage() {
+  const { data, loading, error, reload } = useApiData<PhrasesResponse>("/api/dashboard/phrases", initialData);
   const [search, setSearch] = useState("");
-  const [selectedNovel, setSelectedNovel] = useState(novels[0]);
+  const [selectedNovel, setSelectedNovel] = useState("Все новеллы");
   const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [pendingId, setPendingId] = useState<number | null>(null);
+  const [message, setMessage] = useState("");
 
-  const filtered = mockPhrases.filter((p) => {
-    if (search && !p.original.toLowerCase().includes(search.toLowerCase()) && !p.translation.toLowerCase().includes(search.toLowerCase())) return false;
-    if (selectedNovel !== novels[0] && p.novel !== selectedNovel) return false;
-    return true;
-  });
+  const filtered = useMemo(
+    () =>
+      data.phrases.filter((phrase) => {
+        const term = search.trim().toLowerCase();
+        if (
+          term &&
+          !phrase.phrase.toLowerCase().includes(term) &&
+          !phrase.translation.toLowerCase().includes(term) &&
+          !phrase.context.toLowerCase().includes(term)
+        ) {
+          return false;
+        }
+        if (selectedNovel !== "Все новеллы" && phrase.novel !== selectedNovel) {
+          return false;
+        }
+        return true;
+      }),
+    [data.phrases, search, selectedNovel],
+  );
+
+  const updatePhrase = async (phraseId: number, patch: { status?: PhraseRecord["status"] }) => {
+    try {
+      setPendingId(phraseId);
+      setMessage("");
+      await apiSend(`/api/study-items/${phraseId}`, "PATCH", patch);
+      await reload();
+      setMessage("Изменения сохранены");
+    } catch (requestError) {
+      setMessage(requestError instanceof Error ? requestError.message : "Не удалось обновить фразу");
+    } finally {
+      setPendingId(null);
+    }
+  };
+
+  const deletePhrase = async (phraseId: number) => {
+    try {
+      setPendingId(phraseId);
+      setMessage("");
+      await apiSend(`/api/study-items/${phraseId}`, "DELETE");
+      await reload();
+      setExpandedId(null);
+      setMessage("Фраза удалена");
+    } catch (requestError) {
+      setMessage(requestError instanceof Error ? requestError.message : "Не удалось удалить фразу");
+    } finally {
+      setPendingId(null);
+    }
+  };
 
   return (
     <div>
@@ -61,13 +96,20 @@ export default function PhrasesPage() {
         <span className="text-foreground-secondary">{filtered.length} фраз</span>
       </div>
 
-      {/* Filters */}
+      {error ? (
+        <div className="mb-6 rounded-xl border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">
+          Не удалось загрузить список фраз: {error}
+        </div>
+      ) : null}
+
+      {message ? <p className="mb-4 text-sm text-foreground-secondary">{message}</p> : null}
+
       <div className="flex flex-wrap gap-3 mb-6">
-        <div className="relative flex-1 min-w-[200px]">
+        <div className="relative flex-1 min-w-[220px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-foreground-muted" />
           <input
             type="text"
-            placeholder="Поиск по фразе..."
+            placeholder="Поиск по фразе, переводу или контексту..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="w-full pl-10 pr-4 py-2.5 bg-background-card border border-border rounded-lg text-foreground placeholder:text-foreground-muted focus:outline-none focus:border-accent"
@@ -80,31 +122,27 @@ export default function PhrasesPage() {
             onChange={(e) => setSelectedNovel(e.target.value)}
             className="pl-10 pr-8 py-2.5 bg-background-card border border-border rounded-lg text-foreground appearance-none cursor-pointer focus:outline-none focus:border-accent"
           >
-            {novels.map((n) => <option key={n}>{n}</option>)}
+            {data.novels.map((novel) => (
+              <option key={novel}>{novel}</option>
+            ))}
           </select>
         </div>
       </div>
 
-      {/* Phrase List */}
       <div className="space-y-3">
         {filtered.map((phrase) => (
           <div
             key={phrase.id}
             className="bg-background-card border border-border rounded-xl overflow-hidden transition-colors hover:border-border-hover"
           >
-            <div
-              className="p-4 cursor-pointer"
-              onClick={() => setExpandedId(expandedId === phrase.id ? null : phrase.id)}
-            >
+            <div className="p-4 cursor-pointer" onClick={() => setExpandedId(expandedId === phrase.id ? null : phrase.id)}>
               <div className="flex items-start justify-between gap-4">
                 <div className="flex-1 min-w-0">
-                  <p className="font-medium leading-relaxed">{phrase.original}</p>
+                  <p className="font-medium leading-relaxed">{phrase.phrase}</p>
                   <p className="text-foreground-secondary mt-1 leading-relaxed">{phrase.translation}</p>
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
-                  <Badge variant={statusConfig[phrase.status].variant}>
-                    {statusConfig[phrase.status].label}
-                  </Badge>
+                  <Badge variant={studyStatusMeta[phrase.status].variant}>{studyStatusMeta[phrase.status].label}</Badge>
                   {expandedId === phrase.id ? (
                     <ChevronUp className="w-4 h-4 text-foreground-muted" />
                   ) : (
@@ -114,7 +152,7 @@ export default function PhrasesPage() {
               </div>
             </div>
 
-            {expandedId === phrase.id && (
+            {expandedId === phrase.id ? (
               <div className="px-4 pb-4 pt-0 border-t border-border/50">
                 <div className="flex flex-wrap items-center gap-4 pt-3 text-sm text-foreground-muted">
                   <span className="flex items-center gap-1.5">
@@ -122,23 +160,70 @@ export default function PhrasesPage() {
                     {phrase.novel}
                   </span>
                   <span>Добавлено: {phrase.date}</span>
+                  <span>Повторений: {phrase.repetitions}</span>
                 </div>
-                <div className="flex gap-2 mt-3">
-                  <button className="px-3 py-1.5 text-sm rounded-lg bg-accent-light text-accent hover:bg-accent/25 transition-colors">
-                    В повторение
+
+                {phrase.context ? (
+                  <div className="mt-3 space-y-1">
+                    <p className="text-xs uppercase tracking-wide text-foreground-muted">Контекст</p>
+                    <p className="text-sm text-foreground-secondary italic">&ldquo;{phrase.context}&rdquo;</p>
+                    {phrase.contextTranslation ? (
+                      <p className="text-sm text-foreground-muted">{phrase.contextTranslation}</p>
+                    ) : null}
+                  </div>
+                ) : null}
+
+                {phrase.note ? (
+                  <div className="mt-3 space-y-1">
+                    <p className="text-xs uppercase tracking-wide text-foreground-muted">Заметка</p>
+                    <p className="text-sm text-foreground-secondary">{phrase.note}</p>
+                  </div>
+                ) : null}
+
+                <div className="flex flex-wrap gap-2 mt-4">
+                  <button
+                    type="button"
+                    disabled={pendingId === phrase.id}
+                    onClick={() => void updatePhrase(phrase.id, { status: "hard" })}
+                    className="px-3 py-1.5 text-sm rounded-lg bg-warning/15 text-warning hover:bg-warning/25 transition-colors disabled:opacity-60"
+                  >
+                    В сложные
                   </button>
-                  <button className="px-3 py-1.5 text-sm rounded-lg bg-success/15 text-success hover:bg-success/25 transition-colors">
-                    Изучено
+                  <button
+                    type="button"
+                    disabled={pendingId === phrase.id}
+                    onClick={() => void updatePhrase(phrase.id, { status: "learned" })}
+                    className="px-3 py-1.5 text-sm rounded-lg bg-success/15 text-success hover:bg-success/25 transition-colors disabled:opacity-60"
+                  >
+                    Выучено
                   </button>
-                  <button className="px-3 py-1.5 text-sm rounded-lg bg-danger-light text-danger hover:bg-danger/25 transition-colors">
-                    Удалить
+                  <Button variant="secondary" size="sm" href="/dashboard/learning">
+                    <MessageSquare className="w-4 h-4 mr-1.5" />
+                    В обучение
+                  </Button>
+                  <button
+                    type="button"
+                    disabled={pendingId === phrase.id}
+                    onClick={() => void deletePhrase(phrase.id)}
+                    className="px-3 py-1.5 text-sm rounded-lg bg-danger-light text-danger hover:bg-danger/25 transition-colors disabled:opacity-60"
+                  >
+                    <span className="inline-flex items-center gap-1.5">
+                      <Trash2 className="w-4 h-4" />
+                      Удалить
+                    </span>
                   </button>
                 </div>
               </div>
-            )}
+            ) : null}
           </div>
         ))}
       </div>
+
+      {!loading && filtered.length === 0 ? (
+        <div className="mt-6 rounded-xl border border-border bg-background-card px-4 py-6 text-sm text-foreground-muted">
+          По текущим фильтрам фразы не найдены.
+        </div>
+      ) : null}
     </div>
   );
 }

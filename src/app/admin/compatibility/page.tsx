@@ -1,291 +1,449 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
-  Plus,
   Edit3,
-  Trash2,
-  Search,
-  CheckCircle,
-  AlertTriangle,
-  Loader2,
-  XCircle,
-  Save,
-  X,
   Gamepad2,
+  Plus,
+  Save,
+  Search,
+  Trash2,
+  X,
 } from "lucide-react";
-import { Card } from "@/components/ui/Card";
 
-interface Game {
+import { Badge } from "@/components/ui/Badge";
+import { Card } from "@/components/ui/Card";
+import {
+  apiSend,
+  getApiFieldError,
+  isApiError,
+  useApiData,
+} from "@/lib/client/api";
+import { compatibilityStatusMeta } from "@/lib/client/presentation";
+
+type Game = {
   id: number;
   name: string;
   renpyVersion: string;
-  status: "full" | "partial" | "testing" | "unsupported";
+  status: keyof typeof compatibilityStatusMeta;
   comment: string;
   addedAt: string;
   updatedAt: string;
-}
-
-const statusConfig: Record<string, { label: string; cls: string; icon: typeof CheckCircle }> = {
-  full: { label: "Полностью работает", cls: "bg-success/15 text-success", icon: CheckCircle },
-  partial: { label: "С ограничениями", cls: "bg-warning/15 text-warning", icon: AlertTriangle },
-  testing: { label: "Тестируется", cls: "bg-accent-light text-accent", icon: Loader2 },
-  unsupported: { label: "Не поддерживается", cls: "bg-danger-light text-danger", icon: XCircle },
 };
 
-const initialGames: Game[] = [
-  { id: 1, name: "Doki Doki Literature Club", renpyVersion: "7.4.11", status: "full", comment: "Полная совместимость со всеми функциями", addedAt: "01.01.2026", updatedAt: "05.04.2026" },
-  { id: 2, name: "Katawa Shoujo", renpyVersion: "6.99.12", status: "full", comment: "Работает стабильно", addedAt: "01.01.2026", updatedAt: "03.04.2026" },
-  { id: 3, name: "Everlasting Summer", renpyVersion: "7.3.5", status: "full", comment: "Полная совместимость, включая DLC", addedAt: "01.01.2026", updatedAt: "05.04.2026" },
-  { id: 4, name: "Clannad", renpyVersion: "6.99.14", status: "partial", comment: "Старая версия движка, перевод фраз может работать нестабильно", addedAt: "15.01.2026", updatedAt: "02.04.2026" },
-  { id: 5, name: "Steins;Gate", renpyVersion: "7.4.0", status: "full", comment: "Работает корректно", addedAt: "15.01.2026", updatedAt: "01.04.2026" },
-  { id: 6, name: "The Fruit of Grisaia", renpyVersion: "7.3.2", status: "partial", comment: "Нестандартный интерфейс, всплывающее окно может перекрываться", addedAt: "01.02.2026", updatedAt: "28.03.2026" },
-  { id: 7, name: "Umineko no Naku Koro ni", renpyVersion: "7.5.0", status: "testing", comment: "В процессе тестирования на версии 7.5", addedAt: "20.03.2026", updatedAt: "08.04.2026" },
-  { id: 8, name: "Saya no Uta", renpyVersion: "6.18.0", status: "unsupported", comment: "Слишком старая версия Ren'Py, мод не загружается", addedAt: "01.02.2026", updatedAt: "01.02.2026" },
-  { id: 9, name: "Lucy: The Eternity She Wished For", renpyVersion: "7.4.8", status: "full", comment: "Полная совместимость", addedAt: "01.03.2026", updatedAt: "25.03.2026" },
-  { id: 10, name: "Narcissu", renpyVersion: "7.2.0", status: "testing", comment: "Тестирование совместимости в процессе", addedAt: "05.04.2026", updatedAt: "10.04.2026" },
-];
+type GameDraft = Omit<Game, "id" | "addedAt" | "updatedAt">;
+
+type GameEditorErrors = {
+  name?: string;
+  renpyVersion?: string;
+  status?: string;
+  comment?: string;
+};
+
+const initialData: Game[] = [];
+const initialDraft: GameDraft = {
+  name: "",
+  renpyVersion: "",
+  status: "testing",
+  comment: "",
+};
 
 export default function CompatibilityAdminPage() {
-  const [games, setGames] = useState(initialGames);
+  const { data, loading, error, reload } = useApiData<Game[]>(
+    "/api/admin/compatibility",
+    initialData,
+  );
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
   const [editing, setEditing] = useState<Game | null>(null);
   const [adding, setAdding] = useState(false);
-  const [newGame, setNewGame] = useState<Omit<Game, "id" | "addedAt" | "updatedAt">>({
-    name: "", renpyVersion: "", status: "testing", comment: "",
-  });
+  const [message, setMessage] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<GameEditorErrors>({});
+  const [draft, setDraft] = useState<GameDraft>(initialDraft);
 
-  const filtered = games.filter((g) => {
-    if (search && !g.name.toLowerCase().includes(search.toLowerCase())) return false;
-    if (filterStatus !== "all" && g.status !== filterStatus) return false;
-    return true;
-  });
+  const filtered = useMemo(
+    () =>
+      data.filter((game) => {
+        const term = search.toLowerCase();
+        if (
+          term &&
+          !game.name.toLowerCase().includes(term) &&
+          !game.comment.toLowerCase().includes(term) &&
+          !game.renpyVersion.toLowerCase().includes(term)
+        ) {
+          return false;
+        }
 
-  const handleDelete = (id: number) => {
-    setGames(games.filter((g) => g.id !== id));
-  };
+        if (filterStatus !== "all" && game.status !== filterStatus) {
+          return false;
+        }
 
-  const handleAdd = () => {
-    if (!newGame.name.trim()) return;
-    const now = new Date().toLocaleDateString("ru-RU");
-    setGames([...games, { ...newGame, id: Date.now(), addedAt: now, updatedAt: now }]);
-    setNewGame({ name: "", renpyVersion: "", status: "testing", comment: "" });
+        return true;
+      }),
+    [data, filterStatus, search],
+  );
+
+  const resetEditorState = () => {
     setAdding(false);
-  };
-
-  const handleSaveEdit = () => {
-    if (!editing) return;
-    setGames(games.map((g) => g.id === editing.id ? { ...editing, updatedAt: new Date().toLocaleDateString("ru-RU") } : g));
     setEditing(null);
+    setFieldErrors({});
   };
 
-  const statusCounts = {
-    full: games.filter((g) => g.status === "full").length,
-    partial: games.filter((g) => g.status === "partial").length,
-    testing: games.filter((g) => g.status === "testing").length,
-    unsupported: games.filter((g) => g.status === "unsupported").length,
+  const saveGame = async (payload: {
+    id?: number;
+    name: string;
+    renpyVersion: string;
+    status: keyof typeof compatibilityStatusMeta;
+    comment: string;
+  }) => {
+    try {
+      setMessage("");
+      setFieldErrors({});
+      await apiSend("/api/admin/compatibility", "POST", payload);
+      resetEditorState();
+      setDraft(initialDraft);
+      await reload();
+      setMessage("Каталог совместимости обновлён.");
+    } catch (requestError) {
+      if (isApiError(requestError)) {
+        const nextErrors = {
+          name: getApiFieldError(requestError, "name") ?? undefined,
+          renpyVersion:
+            getApiFieldError(requestError, "renpyVersion") ?? undefined,
+          status: getApiFieldError(requestError, "status") ?? undefined,
+          comment: getApiFieldError(requestError, "comment") ?? undefined,
+        };
+
+        setFieldErrors(nextErrors);
+
+        if (
+          !nextErrors.name &&
+          !nextErrors.renpyVersion &&
+          !nextErrors.status &&
+          !nextErrors.comment
+        ) {
+          setMessage(requestError.message);
+        }
+
+        return;
+      }
+
+      setMessage(
+        requestError instanceof Error
+          ? requestError.message
+          : "Не удалось сохранить игру.",
+      );
+    }
+  };
+
+  const deleteGame = async (gameId: number) => {
+    try {
+      setMessage("");
+      await apiSend(`/api/admin/compatibility/${gameId}`, "DELETE");
+      await reload();
+      setMessage("Игра удалена.");
+    } catch (requestError) {
+      setMessage(
+        requestError instanceof Error
+          ? requestError.message
+          : "Не удалось удалить игру.",
+      );
+    }
   };
 
   return (
     <div>
-      <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
         <h1 className="text-2xl font-bold">Управление совместимостью</h1>
         <button
-          onClick={() => setAdding(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-accent hover:bg-accent-hover text-white rounded-lg text-sm transition-colors"
+          type="button"
+          onClick={() => {
+            setMessage("");
+            setDraft(initialDraft);
+            resetEditorState();
+            setAdding(true);
+          }}
+          className="flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm text-white transition-colors hover:bg-accent-hover"
         >
-          <Plus className="w-4 h-4" /> Добавить игру
+          <Plus className="h-4 w-4" /> Добавить игру
         </button>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-        {(Object.entries(statusCounts) as [keyof typeof statusConfig, number][]).map(([key, count]) => {
-          const Icon = statusConfig[key].icon;
-          return (
-            <div key={key} className="bg-background-card border border-border rounded-xl p-4 flex items-center gap-3">
-              <Icon className={`w-5 h-5 ${statusConfig[key].cls.split(" ")[1]}`} />
-              <div>
-                <p className="text-lg font-bold">{count}</p>
-                <p className="text-xs text-foreground-muted">{statusConfig[key].label}</p>
-              </div>
-            </div>
-          );
-        })}
-      </div>
+      {error ? (
+        <div className="mb-4 rounded-lg border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">
+          Не удалось загрузить каталог: {error}
+        </div>
+      ) : null}
 
-      {/* Filters */}
-      <div className="flex flex-wrap gap-3 mb-4">
-        <div className="relative flex-1 min-w-[220px]">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-foreground-muted" />
+      {message ? (
+        <p className="mb-4 text-sm text-foreground-secondary">{message}</p>
+      ) : null}
+
+      <div className="mb-4 flex flex-wrap gap-3">
+        <div className="relative min-w-[220px] flex-1">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-foreground-muted" />
           <input
             type="text"
-            placeholder="Поиск по названию..."
+            placeholder="Поиск по названию, версии или комментарию..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 bg-background-card border border-border rounded-lg text-sm text-foreground placeholder:text-foreground-muted focus:outline-none focus:border-accent"
+            onChange={(event) => setSearch(event.target.value)}
+            className="w-full rounded-lg border border-border bg-background-card py-2.5 pl-10 pr-4 text-sm text-foreground placeholder:text-foreground-muted focus:border-accent focus:outline-none"
           />
         </div>
         <select
           value={filterStatus}
-          onChange={(e) => setFilterStatus(e.target.value)}
-          className="px-3 py-2.5 bg-background-card border border-border rounded-lg text-sm text-foreground appearance-none cursor-pointer focus:outline-none focus:border-accent"
+          onChange={(event) => setFilterStatus(event.target.value)}
+          className="cursor-pointer appearance-none rounded-lg border border-border bg-background-card px-3 py-2.5 text-sm text-foreground focus:border-accent focus:outline-none"
         >
           <option value="all">Все статусы</option>
-          <option value="full">Полностью работает</option>
-          <option value="partial">С ограничениями</option>
-          <option value="testing">Тестируется</option>
-          <option value="unsupported">Не поддерживается</option>
+          {Object.entries(compatibilityStatusMeta).map(([value, meta]) => (
+            <option key={value} value={value}>
+              {meta.label}
+            </option>
+          ))}
         </select>
       </div>
 
-      {/* Add form */}
-      {adding && (
+      {adding ? (
         <Card className="mb-4">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold flex items-center gap-2"><Gamepad2 className="w-4 h-4" /> Новая игра</h3>
-            <button onClick={() => setAdding(false)} className="text-foreground-muted hover:text-foreground"><X className="w-4 h-4" /></button>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-            <input
-              type="text"
-              placeholder="Название игры"
-              value={newGame.name}
-              onChange={(e) => setNewGame({ ...newGame, name: e.target.value })}
-              className="px-3 py-2.5 bg-background-hover border border-border rounded-lg text-sm focus:outline-none focus:border-accent"
-            />
-            <input
-              type="text"
-              placeholder="Версия Ren'Py"
-              value={newGame.renpyVersion}
-              onChange={(e) => setNewGame({ ...newGame, renpyVersion: e.target.value })}
-              className="px-3 py-2.5 bg-background-hover border border-border rounded-lg text-sm focus:outline-none focus:border-accent"
-            />
-            <select
-              value={newGame.status}
-              onChange={(e) => setNewGame({ ...newGame, status: e.target.value as Game["status"] })}
-              className="px-3 py-2.5 bg-background-hover border border-border rounded-lg text-sm appearance-none cursor-pointer focus:outline-none focus:border-accent"
+          <div className="mb-4 flex items-center justify-between">
+            <h3 className="flex items-center gap-2 font-semibold">
+              <Gamepad2 className="h-4 w-4" /> Новая игра
+            </h3>
+            <button
+              type="button"
+              onClick={() => {
+                setDraft(initialDraft);
+                resetEditorState();
+              }}
+              className="text-foreground-muted hover:text-foreground"
             >
-              <option value="full">Полностью работает</option>
-              <option value="partial">С ограничениями</option>
-              <option value="testing">Тестируется</option>
-              <option value="unsupported">Не поддерживается</option>
-            </select>
-            <input
-              type="text"
-              placeholder="Комментарий"
-              value={newGame.comment}
-              onChange={(e) => setNewGame({ ...newGame, comment: e.target.value })}
-              className="px-3 py-2.5 bg-background-hover border border-border rounded-lg text-sm focus:outline-none focus:border-accent"
-            />
+              <X className="h-4 w-4" />
+            </button>
           </div>
-          <button
-            onClick={handleAdd}
-            disabled={!newGame.name.trim()}
-            className="flex items-center gap-2 px-4 py-2 bg-accent hover:bg-accent-hover disabled:opacity-40 text-white rounded-lg text-sm transition-colors"
-          >
-            <Save className="w-4 h-4" /> Добавить
-          </button>
+          <GameEditor
+            value={draft}
+            errors={fieldErrors}
+            onChange={setDraft}
+            onSave={() => void saveGame(draft)}
+            onCancel={() => {
+              setDraft(initialDraft);
+              resetEditorState();
+            }}
+          />
         </Card>
-      )}
+      ) : null}
 
-      {/* Games table */}
-      <div className="bg-background-card border border-border rounded-xl overflow-hidden">
+      <div className="overflow-hidden rounded-xl border border-border bg-background-card">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
-              <tr className="border-b border-border text-left text-xs text-foreground-muted uppercase tracking-wider">
+              <tr className="border-b border-border text-left text-xs uppercase tracking-wider text-foreground-muted">
                 <th className="px-4 py-3 font-medium">Название</th>
-                <th className="px-4 py-3 font-medium hidden md:table-cell">Ren&apos;Py</th>
+                <th className="hidden px-4 py-3 font-medium md:table-cell">
+                  Ren&apos;Py
+                </th>
                 <th className="px-4 py-3 font-medium">Статус</th>
-                <th className="px-4 py-3 font-medium hidden lg:table-cell">Комментарий</th>
-                <th className="px-4 py-3 font-medium hidden lg:table-cell">Обновлено</th>
-                <th className="px-4 py-3 font-medium w-24">Действия</th>
+                <th className="hidden px-4 py-3 font-medium lg:table-cell">
+                  Комментарий
+                </th>
+                <th className="hidden px-4 py-3 font-medium lg:table-cell">
+                  Обновлено
+                </th>
+                <th className="w-24 px-4 py-3 font-medium">Действия</th>
               </tr>
             </thead>
             <tbody>
               {filtered.map((game) => {
-                const sc = statusConfig[game.status];
-                const StatusIcon = sc.icon;
-                const isEditing = editing?.id === game.id;
+                const status = compatibilityStatusMeta[game.status];
 
-                if (isEditing && editing) {
+                if (editing?.id === game.id) {
                   return (
-                    <tr key={game.id} className="border-b border-border/50 bg-accent-light/20">
-                      <td className="px-4 py-2">
-                        <input
-                          type="text"
-                          value={editing.name}
-                          onChange={(e) => setEditing({ ...editing, name: e.target.value })}
-                          className="w-full px-2 py-1.5 bg-background-hover border border-border rounded text-sm focus:outline-none focus:border-accent"
+                    <tr
+                      key={game.id}
+                      className="border-b border-border/50 bg-accent-light/20"
+                    >
+                      <td className="px-4 py-2" colSpan={6}>
+                        <GameEditor
+                          value={editing}
+                          errors={fieldErrors}
+                          onChange={(next) => setEditing({ ...editing, ...next })}
+                          onSave={() => void saveGame(editing)}
+                          onCancel={() => {
+                            setFieldErrors({});
+                            setEditing(null);
+                          }}
                         />
-                      </td>
-                      <td className="px-4 py-2 hidden md:table-cell">
-                        <input
-                          type="text"
-                          value={editing.renpyVersion}
-                          onChange={(e) => setEditing({ ...editing, renpyVersion: e.target.value })}
-                          className="w-full px-2 py-1.5 bg-background-hover border border-border rounded text-sm focus:outline-none focus:border-accent"
-                        />
-                      </td>
-                      <td className="px-4 py-2">
-                        <select
-                          value={editing.status}
-                          onChange={(e) => setEditing({ ...editing, status: e.target.value as Game["status"] })}
-                          className="px-2 py-1.5 bg-background-hover border border-border rounded text-sm appearance-none cursor-pointer focus:outline-none focus:border-accent"
-                        >
-                          <option value="full">Полностью</option>
-                          <option value="partial">С ограничениями</option>
-                          <option value="testing">Тестируется</option>
-                          <option value="unsupported">Не поддерж.</option>
-                        </select>
-                      </td>
-                      <td className="px-4 py-2 hidden lg:table-cell">
-                        <input
-                          type="text"
-                          value={editing.comment}
-                          onChange={(e) => setEditing({ ...editing, comment: e.target.value })}
-                          className="w-full px-2 py-1.5 bg-background-hover border border-border rounded text-sm focus:outline-none focus:border-accent"
-                        />
-                      </td>
-                      <td className="px-4 py-2 hidden lg:table-cell text-xs text-foreground-muted">{game.updatedAt}</td>
-                      <td className="px-4 py-2">
-                        <div className="flex gap-1">
-                          <button onClick={handleSaveEdit} className="p-1.5 rounded hover:bg-success/15 text-success transition-colors"><Save className="w-4 h-4" /></button>
-                          <button onClick={() => setEditing(null)} className="p-1.5 rounded hover:bg-background-hover text-foreground-muted transition-colors"><X className="w-4 h-4" /></button>
-                        </div>
                       </td>
                     </tr>
                   );
                 }
 
                 return (
-                  <tr key={game.id} className="border-b border-border/50 hover:bg-background-hover/50 transition-colors">
+                  <tr
+                    key={game.id}
+                    className="border-b border-border/50 transition-colors hover:bg-background-hover/50"
+                  >
                     <td className="px-4 py-3">
                       <span className="text-sm font-medium">{game.name}</span>
                     </td>
-                    <td className="px-4 py-3 text-sm text-foreground-secondary hidden md:table-cell">{game.renpyVersion}</td>
-                    <td className="px-4 py-3">
-                      <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium ${sc.cls}`}>
-                        <StatusIcon className="w-3 h-3" />
-                        <span className="hidden sm:inline">{sc.label}</span>
-                      </span>
+                    <td className="hidden px-4 py-3 text-sm text-foreground-secondary md:table-cell">
+                      {game.renpyVersion}
                     </td>
-                    <td className="px-4 py-3 text-xs text-foreground-muted hidden lg:table-cell max-w-[250px] truncate">{game.comment}</td>
-                    <td className="px-4 py-3 text-xs text-foreground-muted hidden lg:table-cell">{game.updatedAt}</td>
+                    <td className="px-4 py-3">
+                      <Badge variant={status.variant}>{status.label}</Badge>
+                    </td>
+                    <td className="hidden max-w-[250px] truncate px-4 py-3 text-xs text-foreground-muted lg:table-cell">
+                      {game.comment}
+                    </td>
+                    <td className="hidden px-4 py-3 text-xs text-foreground-muted lg:table-cell">
+                      {new Date(game.updatedAt).toLocaleDateString("ru-RU")}
+                    </td>
                     <td className="px-4 py-3">
                       <div className="flex gap-1">
-                        <button onClick={() => setEditing(game)} className="p-1.5 rounded hover:bg-background-hover text-foreground-muted hover:text-foreground transition-colors"><Edit3 className="w-4 h-4" /></button>
-                        <button onClick={() => handleDelete(game.id)} className="p-1.5 rounded hover:bg-danger-light text-foreground-muted hover:text-danger transition-colors"><Trash2 className="w-4 h-4" /></button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setMessage("");
+                            setAdding(false);
+                            setFieldErrors({});
+                            setEditing(game);
+                          }}
+                          className="rounded p-1.5 text-foreground-muted transition-colors hover:bg-background-hover hover:text-foreground"
+                        >
+                          <Edit3 className="h-4 w-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void deleteGame(game.id)}
+                          className="rounded p-1.5 text-foreground-muted transition-colors hover:bg-danger-light hover:text-danger"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
                       </div>
                     </td>
                   </tr>
                 );
               })}
+              {!loading && filtered.length === 0 ? (
+                <tr>
+                  <td className="px-4 py-6 text-foreground-muted" colSpan={6}>
+                    В каталоге нет записей по текущему фильтру.
+                  </td>
+                </tr>
+              ) : null}
             </tbody>
           </table>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function GameEditor({
+  value,
+  errors,
+  onChange,
+  onSave,
+  onCancel,
+}: {
+  value: GameDraft;
+  errors?: GameEditorErrors;
+  onChange: (value: GameDraft) => void;
+  onSave: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+      <div>
+        <input
+          type="text"
+          placeholder="Название игры"
+          value={value.name}
+          onChange={(event) => onChange({ ...value, name: event.target.value })}
+          className={`w-full rounded-lg border bg-background-hover px-3 py-2.5 text-sm focus:border-accent focus:outline-none ${
+            errors?.name ? "border-danger" : "border-border"
+          }`}
+        />
+        {errors?.name ? (
+          <p className="mt-1 text-sm text-danger">{errors.name}</p>
+        ) : null}
+      </div>
+
+      <div>
+        <input
+          type="text"
+          placeholder="Версия Ren'Py"
+          value={value.renpyVersion}
+          onChange={(event) =>
+            onChange({ ...value, renpyVersion: event.target.value })
+          }
+          className={`w-full rounded-lg border bg-background-hover px-3 py-2.5 text-sm focus:border-accent focus:outline-none ${
+            errors?.renpyVersion ? "border-danger" : "border-border"
+          }`}
+        />
+        {errors?.renpyVersion ? (
+          <p className="mt-1 text-sm text-danger">{errors.renpyVersion}</p>
+        ) : null}
+      </div>
+
+      <div>
+        <select
+          value={value.status}
+          onChange={(event) =>
+            onChange({
+              ...value,
+              status: event.target.value as keyof typeof compatibilityStatusMeta,
+            })
+          }
+          className={`w-full cursor-pointer appearance-none rounded-lg border bg-background-hover px-3 py-2.5 text-sm focus:border-accent focus:outline-none ${
+            errors?.status ? "border-danger" : "border-border"
+          }`}
+        >
+          {Object.entries(compatibilityStatusMeta).map(([status, meta]) => (
+            <option key={status} value={status}>
+              {meta.label}
+            </option>
+          ))}
+        </select>
+        {errors?.status ? (
+          <p className="mt-1 text-sm text-danger">{errors.status}</p>
+        ) : null}
+      </div>
+
+      <div>
+        <input
+          type="text"
+          placeholder="Комментарий"
+          value={value.comment}
+          onChange={(event) =>
+            onChange({ ...value, comment: event.target.value })
+          }
+          className={`w-full rounded-lg border bg-background-hover px-3 py-2.5 text-sm focus:border-accent focus:outline-none ${
+            errors?.comment ? "border-danger" : "border-border"
+          }`}
+        />
+        {errors?.comment ? (
+          <p className="mt-1 text-sm text-danger">{errors.comment}</p>
+        ) : null}
+      </div>
+
+      <div className="flex gap-2 md:col-span-2">
+        <button
+          type="button"
+          onClick={onSave}
+          disabled={!value.name.trim()}
+          className="flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm text-white transition-colors hover:bg-accent-hover disabled:opacity-40"
+        >
+          <Save className="h-4 w-4" /> Сохранить
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="flex items-center gap-2 rounded-lg bg-background-hover px-4 py-2 text-sm text-foreground-secondary transition-colors hover:bg-background-card"
+        >
+          <X className="h-4 w-4" /> Отмена
+        </button>
       </div>
     </div>
   );

@@ -1,0 +1,18 @@
+[Unit]
+Description=NVLingo Docker Compose stack
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/opt/nvltrnslt
+ExecStart=/usr/bin/docker compose --env-file .env.production -f compose.production.yml up -d --remove-orphans
+ExecStop=/usr/bin/docker compose --env-file .env.production -f compose.production.yml down
+ExecReload=/usr/bin/docker compose --env-file .env.production -f compose.production.yml up -d --remove-orphans
+TimeoutStartSec=0
+TimeoutStopSec=120
+
+[Install]
+WantedBy=multi-user.target

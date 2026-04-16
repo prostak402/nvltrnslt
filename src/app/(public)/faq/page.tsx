@@ -18,78 +18,81 @@ import {
   Gamepad2,
 } from "lucide-react";
 
+import {
+  activationFlowSummary,
+  deviceLimitSummary,
+  freePlanSummary,
+  paidPlansSummary,
+} from "@/lib/product";
+
 const faqItems = [
   {
     icon: Wifi,
     question: "Нужен ли интернет для работы мода?",
     answer:
-      "Для перевода новых слов и фраз необходимо подключение к интернету. Запросы отправляются на сервер для получения перевода. Однако уже переведённые слова кэшируются локально и доступны без подключения.",
+      "Для новых переводов нужно подключение к интернету. Уже переведённые слова и фразы могут открываться из локального кэша.",
   },
   {
     icon: WifiOff,
     question: "Как работает офлайн-режим?",
     answer:
-      "Мод автоматически сохраняет все переведённые слова в локальный кэш на вашем компьютере. Если интернет недоступен, вы можете просматривать ранее переведённые слова. Новые переводы и синхронизация с сайтом будут недоступны до восстановления соединения.",
+      "Без сети мод не сможет получить новые переводы и синхронизировать кабинет, но ранее сохранённые переводы останутся доступны локально.",
   },
   {
     icon: Database,
     question: "Где хранятся мои данные?",
     answer:
-      "Ваши слова и фразы хранятся в двух местах: локально в папке мода (для быстрого доступа и офлайн-режима) и на нашем сервере (для синхронизации с сайтом и доступа с разных устройств). Данные на сервере зашифрованы и доступны только вам.",
+      "Слова и фразы хранятся в аккаунте для синхронизации с кабинетом, а часть данных кэшируется локально для более быстрой работы мода.",
   },
   {
     icon: CreditCard,
     question: "Можно ли пользоваться бесплатно?",
-    answer:
-      "Да, бесплатный тариф доступен без ограничений по времени. Он включает 30-50 переводов в день, ограниченный словарь, базовые карточки и синхронизацию. Этого достаточно для знакомства с платформой и казуального использования.",
+    answer: freePlanSummary(),
   },
   {
     icon: MessageSquareText,
     question: "Поддерживается ли перевод фраз?",
     answer:
-      "Да, мод поддерживает перевод как отдельных слов, так и целых фраз. Выделите несколько слов в тексте диалога, и мод переведёт всю фразу целиком с учётом контекста. Фразы также можно сохранять в словарь.",
+      "Да. Мод поддерживает перевод отдельных слов и целых фраз. Сохранённые фразы тоже попадают в словарь и историю.",
   },
   {
     icon: Wrench,
     question: "Как установить мод?",
-    answer:
-      "Скачайте архив с модом со страницы загрузки, распакуйте его и скопируйте файлы в папку game/ вашей визуальной новеллы на Ren'Py. При следующем запуске игры мод активируется автоматически. Подробная инструкция доступна на странице загрузки.",
+    answer: activationFlowSummary(),
   },
   {
     icon: Gamepad2,
     question: "С какими играми совместим мод?",
     answer:
-      "Мод совместим с большинством визуальных новелл на движке Ren'Py версий 7.x и 8.x. Полный список протестированных игр с указанием статуса совместимости доступен на странице совместимости. Если вашей игры нет в списке — попробуйте установить мод, скорее всего он будет работать.",
+      "Мод ориентирован на визуальные новеллы на Ren'Py 7.x и 8.x. Полный список проверенных игр доступен на странице совместимости.",
   },
   {
     icon: User,
     question: "Как создать аккаунт?",
     answer:
-      "Зарегистрируйтесь на сайте, указав email и пароль. После регистрации вы получите код доступа для мода в личном кабинете. Введите этот код в настройках мода для подключения к вашему аккаунту.",
+      "Зарегистрируйтесь на сайте, затем скачайте файл активации из кабинета и положите его в папку game/ рядом с модом.",
   },
   {
     icon: Rocket,
     question: "Чем отличаются платные тарифы?",
-    answer:
-      "Базовый тариф ($4.99/мес) увеличивает лимит переводов до 200 в день, открывает полный словарь, расширенные карточки, упражнения и ежедневный прогресс. Расширенный тариф ($9.99/мес) снимает все лимиты, добавляет авто-перевод предложений, расширенную статистику и приоритетную обработку.",
+    answer: paidPlansSummary(),
+  },
+  {
+    icon: Shield,
+    question: "Можно ли использовать мод на нескольких устройствах?",
+    answer: deviceLimitSummary(),
   },
   {
     icon: Lock,
     question: "Насколько безопасны мои данные?",
     answer:
-      "Мы серьёзно относимся к безопасности. Все данные передаются по зашифрованному каналу (HTTPS). Пароли хранятся в захешированном виде. Мы не передаём ваши данные третьим лицам и не используем их в рекламных целях. Вы можете удалить свой аккаунт и все данные в любой момент.",
+      "Аккаунт и данные словаря работают через защищённый серверный слой. Пароли не хранятся в открытом виде, а ключ активации привязан к вашему аккаунту.",
   },
   {
     icon: Globe,
     question: "Какие языки перевода поддерживаются?",
     answer:
-      "В настоящее время мод поддерживает перевод с английского на русский язык. Мы планируем добавить поддержку других языков в будущих обновлениях.",
-  },
-  {
-    icon: Shield,
-    question: "Мод безопасен для игры?",
-    answer:
-      "Да, мод не модифицирует файлы игры и не влияет на сохранения. Он работает как дополнительный слой поверх интерфейса Ren'Py. Вы можете удалить мод в любой момент, просто убрав его файлы из папки game/ — игра будет работать как прежде.",
+      "Сейчас основной сценарий — перевод с английского на русский. Дальнейшее расширение языков возможно в следующих версиях.",
   },
 ];
 
@@ -101,43 +104,45 @@ export default function FAQPage() {
   };
 
   return (
-    <main className="min-h-screen py-16 px-4">
-      <div className="max-w-7xl mx-auto space-y-16">
-        {/* Header */}
-        <section className="text-center max-w-3xl mx-auto">
-          <div className="inline-flex items-center gap-2 bg-accent-light text-accent px-4 py-1.5 rounded-full text-sm font-medium mb-6">
-            <HelpCircle className="w-4 h-4" />
+    <main className="min-h-screen px-4 py-16">
+      <div className="mx-auto max-w-7xl space-y-16">
+        <section className="mx-auto max-w-3xl text-center">
+          <div className="mb-6 inline-flex items-center gap-2 rounded-full bg-accent-light px-4 py-1.5 text-sm font-medium text-accent">
+            <HelpCircle className="h-4 w-4" />
             FAQ
           </div>
-          <h1 className="text-4xl md:text-5xl font-bold text-foreground mb-6">
+          <h1 className="mb-6 text-4xl font-bold text-foreground md:text-5xl">
             Частые вопросы
           </h1>
-          <p className="text-lg text-foreground-secondary leading-relaxed">
-            Ответы на самые популярные вопросы о платформе NVL Translate,
-            установке мода и работе сервиса.
+          <p className="text-lg leading-relaxed text-foreground-secondary">
+            Здесь собраны ответы по установке, тарифам, устройствам и работе
+            кабинета. Они синхронизированы с текущими правилами продукта.
           </p>
         </section>
 
-        {/* Accordion */}
-        <section className="max-w-3xl mx-auto">
-          <div className="divide-y divide-border rounded-2xl border border-border overflow-hidden">
+        <section className="mx-auto max-w-3xl">
+          <div className="overflow-hidden rounded-2xl border border-border">
             {faqItems.map((item, index) => {
               const isOpen = openIndex === index;
               const Icon = item.icon;
+
               return (
-                <div key={index} className="bg-background-card">
+                <div
+                  key={item.question}
+                  className="border-b border-border last:border-b-0 bg-background-card"
+                >
                   <button
                     onClick={() => toggle(index)}
                     className="flex w-full items-center gap-4 px-6 py-5 text-left transition hover:bg-background-hover"
                   >
-                    <div className="flex-shrink-0 w-8 h-8 bg-accent-light rounded-lg flex items-center justify-center">
-                      <Icon className="w-4 h-4 text-accent" />
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent-light">
+                      <Icon className="h-4 w-4 text-accent" />
                     </div>
                     <span className="flex-1 pr-4 font-medium text-foreground">
                       {item.question}
                     </span>
                     <ChevronDown
-                      className={`w-5 h-5 flex-shrink-0 text-foreground-muted transition-transform duration-200 ${
+                      className={`h-5 w-5 shrink-0 text-foreground-muted transition-transform duration-200 ${
                         isOpen ? "rotate-180" : ""
                       }`}
                     />

@@ -3,65 +3,113 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Languages, Mail, Lock, ShieldCheck } from "lucide-react";
+import { Languages, Mail, Lock, ShieldCheck, User } from "lucide-react";
+
+import { apiSend, getApiFieldError, isApiError } from "@/lib/client/api";
 
 export default function RegisterPage() {
   const router = useRouter();
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [serverError, setServerError] = useState("");
   const [errors, setErrors] = useState<{
+    name?: string;
     email?: string;
     password?: string;
     confirmPassword?: string;
   }>({});
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const newErrors: typeof errors = {};
+    const nextErrors: typeof errors = {};
+    setServerError("");
+    setErrors({});
 
-    if (!email) newErrors.email = "Введите электронную почту";
-    else if (!/\S+@\S+\.\S+/.test(email))
-      newErrors.email = "Некорректный адрес электронной почты";
+    if (!name.trim()) nextErrors.name = "Введите имя";
+    if (!email) nextErrors.email = "Введите email";
+    else if (!/\S+@\S+\.\S+/.test(email)) nextErrors.email = "Введите корректный email";
 
-    if (!password) newErrors.password = "Введите пароль";
-    else if (password.length < 6)
-      newErrors.password = "Пароль должен быть не менее 6 символов";
+    if (!password) nextErrors.password = "Введите пароль";
+    else if (password.length < 6) nextErrors.password = "Пароль должен быть не короче 6 символов";
 
-    if (!confirmPassword)
-      newErrors.confirmPassword = "Подтвердите пароль";
-    else if (password !== confirmPassword)
-      newErrors.confirmPassword = "Пароли не совпадают";
+    if (!confirmPassword) nextErrors.confirmPassword = "Подтвердите пароль";
+    else if (password !== confirmPassword) nextErrors.confirmPassword = "Пароли не совпадают";
 
-    setErrors(newErrors);
+    setErrors(nextErrors);
 
-    if (Object.keys(newErrors).length === 0) {
+    if (Object.keys(nextErrors).length > 0) {
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      await apiSend("/api/auth/register", "POST", {
+        name: name.trim(),
+        email: email.trim().toLowerCase(),
+        password,
+      });
       router.push("/auth/onboarding");
+      router.refresh();
+    } catch (error) {
+      if (isApiError(error)) {
+        const nameError = getApiFieldError(error, "name");
+        const emailError = getApiFieldError(error, "email");
+        const passwordError = getApiFieldError(error, "password");
+
+        setErrors({
+          name: nameError ?? undefined,
+          email: emailError ?? undefined,
+          password: passwordError ?? undefined,
+          confirmPassword: undefined,
+        });
+
+        if (!nameError && !emailError && !passwordError) {
+          setServerError(error.message);
+        }
+      } else {
+        setServerError(error instanceof Error ? error.message : "Не удалось создать аккаунт");
+      }
+    } finally {
+      setIsSubmitting(false);
     }
   }
 
   return (
     <div className="w-full max-w-md">
       <div className="bg-background-card border border-border rounded-2xl p-8 shadow-lg">
-        {/* Logo */}
         <div className="flex items-center justify-center gap-2 mb-8">
           <Languages className="w-8 h-8 text-accent" />
-          <span className="text-2xl font-bold text-foreground">
-            NVL Translate
-          </span>
+          <span className="text-2xl font-bold text-foreground">NVLingo</span>
         </div>
 
-        <h1 className="text-xl font-semibold text-foreground text-center mb-6">
-          Создать аккаунт
-        </h1>
+        <h1 className="text-xl font-semibold text-foreground text-center mb-6">Создать аккаунт</h1>
 
         <form onSubmit={handleSubmit} className="space-y-5">
-          {/* Email */}
           <div>
-            <label
-              htmlFor="email"
-              className="block text-sm font-medium text-foreground-secondary mb-1.5"
-            >
+            <label htmlFor="name" className="block text-sm font-medium text-foreground-secondary mb-1.5">
+              Имя
+            </label>
+            <div className="relative">
+              <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-foreground-muted" />
+              <input
+                id="name"
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Алексей"
+                className={`w-full pl-10 pr-4 py-2.5 bg-background-secondary border rounded-lg text-foreground placeholder:text-foreground-muted focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent transition ${
+                  errors.name ? "border-danger" : "border-border"
+                }`}
+              />
+            </div>
+            {errors.name ? <p className="mt-1 text-sm text-danger">{errors.name}</p> : null}
+          </div>
+
+          <div>
+            <label htmlFor="email" className="block text-sm font-medium text-foreground-secondary mb-1.5">
               Электронная почта
             </label>
             <div className="relative">
@@ -77,17 +125,11 @@ export default function RegisterPage() {
                 }`}
               />
             </div>
-            {errors.email && (
-              <p className="mt-1 text-sm text-danger">{errors.email}</p>
-            )}
+            {errors.email ? <p className="mt-1 text-sm text-danger">{errors.email}</p> : null}
           </div>
 
-          {/* Password */}
           <div>
-            <label
-              htmlFor="password"
-              className="block text-sm font-medium text-foreground-secondary mb-1.5"
-            >
+            <label htmlFor="password" className="block text-sm font-medium text-foreground-secondary mb-1.5">
               Пароль
             </label>
             <div className="relative">
@@ -103,17 +145,11 @@ export default function RegisterPage() {
                 }`}
               />
             </div>
-            {errors.password && (
-              <p className="mt-1 text-sm text-danger">{errors.password}</p>
-            )}
+            {errors.password ? <p className="mt-1 text-sm text-danger">{errors.password}</p> : null}
           </div>
 
-          {/* Confirm Password */}
           <div>
-            <label
-              htmlFor="confirmPassword"
-              className="block text-sm font-medium text-foreground-secondary mb-1.5"
-            >
+            <label htmlFor="confirmPassword" className="block text-sm font-medium text-foreground-secondary mb-1.5">
               Подтвердите пароль
             </label>
             <div className="relative">
@@ -129,29 +165,27 @@ export default function RegisterPage() {
                 }`}
               />
             </div>
-            {errors.confirmPassword && (
-              <p className="mt-1 text-sm text-danger">
-                {errors.confirmPassword}
-              </p>
-            )}
+            {errors.confirmPassword ? <p className="mt-1 text-sm text-danger">{errors.confirmPassword}</p> : null}
           </div>
 
-          {/* Submit */}
+          {serverError ? (
+            <p className="rounded-lg border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">
+              {serverError}
+            </p>
+          ) : null}
+
           <button
             type="submit"
-            className="w-full py-2.5 bg-accent hover:bg-accent-hover text-white font-medium rounded-lg transition cursor-pointer"
+            disabled={isSubmitting}
+            className="w-full py-2.5 bg-accent hover:bg-accent-hover text-white font-medium rounded-lg transition cursor-pointer disabled:opacity-60"
           >
-            Зарегистрироваться
+            {isSubmitting ? "Создаём аккаунт..." : "Зарегистрироваться"}
           </button>
         </form>
 
-        {/* Link to login */}
         <p className="mt-6 text-center text-sm text-foreground-muted">
           Уже есть аккаунт?{" "}
-          <Link
-            href="/auth/login"
-            className="text-accent hover:text-accent-hover transition"
-          >
+          <Link href="/auth/login" className="text-accent hover:text-accent-hover transition">
             Войти
           </Link>
         </p>

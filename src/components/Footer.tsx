@@ -93,7 +93,7 @@ export function Footer() {
 
         <div className="mt-12 pt-8 border-t border-border">
           <p className="text-sm text-foreground-muted text-center">
-            &copy; {new Date().getFullYear()} NVL Translate. Все права защищены.
+            &copy; {new Date().getFullYear()} NVLingo. Все права защищены.
           </p>
         </div>
       </div>
