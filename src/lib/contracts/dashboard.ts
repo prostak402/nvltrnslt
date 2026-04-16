@@ -93,6 +93,11 @@ export interface DashboardHistoryResponse {
   }>;
 }
 
+export interface DashboardShellSummary {
+  translationsUsed: number;
+  translationsLimit: number | null;
+}
+
 export interface DashboardSettingsResponse {
   email: string;
   dailyWords: number;

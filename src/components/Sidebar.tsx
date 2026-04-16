@@ -18,7 +18,8 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
-import { initials, planLabel, planTranslationLimit } from "@/lib/client/presentation";
+import { initials, planLabel } from "@/lib/client/presentation";
+import type { DashboardShellSummary } from "@/lib/contracts/dashboard";
 import type { PlanId, UserRole } from "@/lib/types";
 
 type NavItem = {
@@ -49,11 +50,23 @@ type SidebarProps = {
     role: UserRole;
     plan: PlanId;
   } | null;
+  shellSummary?: DashboardShellSummary | null;
   onLogout?: () => void;
 };
 
-export function Sidebar({ open, onClose, user, onLogout }: SidebarProps) {
+export function Sidebar({ open, onClose, user, shellSummary, onLogout }: SidebarProps) {
   const pathname = usePathname();
+  const translationsUsed = shellSummary?.translationsUsed ?? 0;
+  const translationsLimitLabel = shellSummary?.translationsLimit ?? "∞";
+  const translationUsagePercent =
+    shellSummary?.translationsLimit === null
+      ? 100
+      : shellSummary?.translationsLimit
+        ? Math.min(
+            100,
+            Math.round((translationsUsed / shellSummary.translationsLimit) * 100),
+          )
+        : 0;
 
   const isActive = (href: string) => {
     if (href === "/dashboard") return pathname === "/dashboard";
@@ -114,10 +127,15 @@ export function Sidebar({ open, onClose, user, onLogout }: SidebarProps) {
           <div className="mt-2">
             <div className="flex items-center justify-between text-xs mb-1">
               <span className="text-foreground-muted">Лимит переводов</span>
-              <span className="text-foreground-secondary">0 / {user ? planTranslationLimit(user.plan) : "0"}</span>
+              <span className="text-foreground-secondary">
+                {translationsUsed} / {translationsLimitLabel}
+              </span>
             </div>
             <div className="w-full h-1.5 bg-background rounded-full overflow-hidden">
-              <div className="h-full bg-accent rounded-full" style={{ width: "0%" }} />
+              <div
+                className="h-full bg-accent rounded-full"
+                style={{ width: `${translationUsagePercent}%` }}
+              />
             </div>
           </div>
           {user?.role === "admin" ? (

@@ -7,6 +7,7 @@ import type {
   DashboardHistoryResponse,
   DashboardOverviewResponse,
   DashboardProgressResponse,
+  DashboardShellSummary,
   DashboardSettingsResponse,
 } from "@/lib/contracts/dashboard";
 import { getDb } from "@/lib/db/client";
@@ -41,6 +42,7 @@ import {
   findSettings,
   findUserById,
   getPlanLimit,
+  getUsageRecord,
   logActivity,
   omitPassword,
   toIsoString,
@@ -187,6 +189,25 @@ async function loadStudyData(userId: number) {
     items: itemRows.map(mapStudyItemRow),
     occurrences: occurrenceRows.map(mapOccurrenceRow),
     reviews: reviewRows.map(mapReviewRow),
+  };
+}
+
+export async function getDashboardShellSummary(
+  userId: number,
+): Promise<DashboardShellSummary> {
+  const [user, usage, adminSettings] = await Promise.all([
+    findUserById(getDb(), userId),
+    getUsageRecord(getDb(), userId),
+    getAdminSettingsRecord(getDb()),
+  ]);
+
+  if (!user) {
+    throw new Error("USER_NOT_FOUND");
+  }
+
+  return {
+    translationsUsed: usage.count,
+    translationsLimit: getPlanLimit(user.plan, adminSettings),
   };
 }
 

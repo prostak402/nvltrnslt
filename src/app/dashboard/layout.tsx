@@ -2,8 +2,10 @@ import { redirect } from "next/navigation";
 
 import { MaintenanceView } from "@/components/MaintenanceView";
 import { DashboardShell } from "@/components/DashboardShell";
+import type { DashboardShellSummary } from "@/lib/contracts/dashboard";
 import type { SessionSummary } from "@/lib/contracts/session";
 import { getCurrentUser } from "@/lib/server/auth";
+import { getDashboardShellSummary } from "@/lib/server/services/study";
 import { isMaintenanceModeEnabled } from "@/lib/server/services/site-settings";
 
 export default async function DashboardLayout({
@@ -28,6 +30,8 @@ export default async function DashboardLayout({
     return <MaintenanceView />;
   }
 
+  const shellSummary: DashboardShellSummary = await getDashboardShellSummary(user.id);
+
   const session: SessionSummary = {
     isAuthenticated: true,
     user: {
@@ -39,5 +43,9 @@ export default async function DashboardLayout({
     },
   };
 
-  return <DashboardShell session={session}>{children}</DashboardShell>;
+  return (
+    <DashboardShell session={session} shellSummary={shellSummary}>
+      {children}
+    </DashboardShell>
+  );
 }

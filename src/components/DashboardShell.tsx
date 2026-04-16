@@ -6,15 +6,18 @@ import { Menu, User } from "lucide-react";
 
 import { Sidebar } from "@/components/Sidebar";
 import { apiSend } from "@/lib/client/api";
+import type { DashboardShellSummary } from "@/lib/contracts/dashboard";
 import type { SessionSummary } from "@/lib/contracts/session";
 import { planLabel } from "@/lib/client/presentation";
 
 export function DashboardShell({
   children,
   session,
+  shellSummary,
 }: {
   children: React.ReactNode;
   session: SessionSummary;
+  shellSummary: DashboardShellSummary;
 }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
@@ -39,6 +42,7 @@ export function DashboardShell({
         open={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
         user={user}
+        shellSummary={shellSummary}
         onLogout={handleLogout}
       />
 
