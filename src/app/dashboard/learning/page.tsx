@@ -1,7 +1,7 @@
 ﻿"use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { BookOpen, Brain, Check, Clock, Eye, Layers, Library, MessageSquare, RotateCcw, Star, Trophy, X } from "lucide-react";
+import { BookOpen, Brain, Check, Clock, Eye, Layers, Library, MessageSquare, RotateCcw, Star, Trophy, X, type LucideIcon } from "lucide-react";
 
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -13,6 +13,7 @@ type LearningCard = { id: number; en: string; ru: string; context: string; kind:
 type LearningResponse = { cards: LearningCard[]; categories: Array<{ label: string; count: number }>; novels: string[]; settings: { dailyWords: number; prioritizeDifficult: boolean; includePhrases: boolean } };
 type LearningMode = "flashcards" | "pairs";
 type KindFilter = "all" | "word" | "phrase" | "sentence";
+type LearningShortcut = "newWords" | "hardWords" | "phrases" | "random";
 type ReviewSummary = Record<"know" | "hard" | "unknown", number>;
 type PairFeedback = { kind: "success" | "error"; leftId: number; rightId: number } | null;
 
@@ -23,6 +24,28 @@ const initialData: LearningResponse = { cards: [], categories: [], novels: [ALL_
 
 const createSummary = (): ReviewSummary => ({ know: 0, hard: 0, unknown: 0 });
 const kindLabel = (kind: LearningCard["kind"]) => kind === "phrase" ? "Фраза" : kind === "sentence" ? "Предложение" : "Слово";
+
+function cardsForShortcut(cards: LearningCard[], shortcut: LearningShortcut) {
+  if (shortcut === "newWords") {
+    return cards.filter((card) => card.kind === "word" && card.status === "new");
+  }
+
+  if (shortcut === "hardWords") {
+    return cards.filter((card) => card.kind === "word" && card.status === "hard");
+  }
+
+  if (shortcut === "phrases") {
+    return cards.filter((card) => card.kind === "phrase");
+  }
+
+  return cards;
+}
+
+function kindForShortcut(shortcut: LearningShortcut): KindFilter {
+  if (shortcut === "phrases") return "phrase";
+  if (shortcut === "newWords" || shortcut === "hardWords") return "word";
+  return "all";
+}
 
 function seeded(seed: number) {
   let value = seed % 2147483647;
@@ -281,6 +304,7 @@ export default function LearningPage() {
   const [showTranslation, setShowTranslation] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [selectedKind, setSelectedKind] = useState<KindFilter>("all");
+  const [selectedShortcut, setSelectedShortcut] = useState<LearningShortcut>("random");
   const [selectedNovel, setSelectedNovel] = useState(ALL_NOVELS_LABEL);
   const [sessionSummary, setSessionSummary] = useState<ReviewSummary>(createSummary);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -291,7 +315,67 @@ export default function LearningPage() {
   const activeNovel = availableNovels.includes(selectedNovel) ? selectedNovel : availableNovels[0];
   const hasSentenceCards = data.cards.some((card) => card.kind === "sentence");
   const activeKind = selectedKind === "sentence" && !hasSentenceCards ? "all" : selectedKind;
-  const filteredCards = useMemo(() => data.cards.filter((card) => (activeKind === "all" || card.kind === activeKind) && (activeNovel === ALL_NOVELS_LABEL || card.novel === activeNovel)), [activeKind, activeNovel, data.cards]);
+  const novelScopedCards = useMemo(
+    () => data.cards.filter((card) => activeNovel === ALL_NOVELS_LABEL || card.novel === activeNovel),
+    [activeNovel, data.cards],
+  );
+  const shortcutScopedCards = useMemo(() => {
+    const nextCards = cardsForShortcut(novelScopedCards, selectedShortcut);
+    if (selectedShortcut !== "random") {
+      return nextCards;
+    }
+
+    const seed = nextCards.reduce((sum, card) => sum + card.id, 0) + nextCards.length * 17;
+    return shuffle(nextCards, seed || 17);
+  }, [novelScopedCards, selectedShortcut]);
+  const filteredCards = useMemo(
+    () => shortcutScopedCards.filter((card) => activeKind === "all" || card.kind === activeKind),
+    [activeKind, shortcutScopedCards],
+  );
+  const shortcutButtons = useMemo<Array<{
+    id: LearningShortcut;
+    label: string;
+    count: number;
+    icon: LucideIcon;
+    iconClass: string;
+    activeBadgeVariant: "accent" | "warning" | "default";
+  }>>(
+    () => [
+      {
+        id: "newWords",
+        label: "Новые слова",
+        count: cardsForShortcut(novelScopedCards, "newWords").length,
+        icon: BookOpen,
+        iconClass: "text-accent",
+        activeBadgeVariant: "accent",
+      },
+      {
+        id: "hardWords",
+        label: "Сложные слова",
+        count: cardsForShortcut(novelScopedCards, "hardWords").length,
+        icon: Brain,
+        iconClass: "text-warning",
+        activeBadgeVariant: "warning",
+      },
+      {
+        id: "phrases",
+        label: "Фразы",
+        count: cardsForShortcut(novelScopedCards, "phrases").length,
+        icon: MessageSquare,
+        iconClass: "text-accent-secondary",
+        activeBadgeVariant: "accent",
+      },
+      {
+        id: "random",
+        label: "Случайная подборка",
+        count: novelScopedCards.length,
+        icon: Layers,
+        iconClass: "text-foreground-secondary",
+        activeBadgeVariant: "default",
+      },
+    ],
+    [novelScopedCards],
+  );
   const filteredIdsKey = filteredCards.map((card) => card.id).join("-") || "empty";
   const safeIndex = Math.min(currentIndex, Math.max(filteredCards.length - 1, 0));
   const currentCard = filteredCards[safeIndex];
@@ -308,11 +392,22 @@ export default function LearningPage() {
 
   const handleKindChange = (nextKind: KindFilter) => {
     setSelectedKind(nextKind);
+    if (nextKind === "phrase") {
+      setSelectedShortcut("phrases");
+    } else if (nextKind !== "word") {
+      setSelectedShortcut("random");
+    }
     resetFlashcardSession();
   };
 
   const handleNovelChange = (nextNovel: string) => {
     setSelectedNovel(nextNovel);
+    resetFlashcardSession();
+  };
+
+  const handleShortcutChange = (nextShortcut: LearningShortcut) => {
+    setSelectedShortcut(nextShortcut);
+    setSelectedKind(kindForShortcut(nextShortcut));
     resetFlashcardSession();
   };
 
@@ -413,16 +508,29 @@ export default function LearningPage() {
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-        {data.categories.map((category, index) => (
-          <Card key={`${category.label}-${index}`} hover className="!p-4 text-center">
-            {index === 0 ? <BookOpen className="w-6 h-6 mx-auto mb-2 text-accent" /> : null}
-            {index === 1 ? <Brain className="w-6 h-6 mx-auto mb-2 text-warning" /> : null}
-            {index === 2 ? <MessageSquare className="w-6 h-6 mx-auto mb-2 text-accent-secondary" /> : null}
-            {index > 2 ? <Layers className="w-6 h-6 mx-auto mb-2 text-foreground-secondary" /> : null}
-            <p className="text-sm font-medium text-foreground">{category.label}</p>
-            <Badge variant="default" className="mt-2">{category.count}</Badge>
-          </Card>
-        ))}
+        {shortcutButtons.map((shortcut) => {
+          const Icon = shortcut.icon;
+          const isActive = selectedShortcut === shortcut.id;
+
+          return (
+            <button
+              key={shortcut.id}
+              type="button"
+              onClick={() => handleShortcutChange(shortcut.id)}
+              aria-pressed={isActive}
+              className={`rounded-xl border p-4 text-center transition-colors duration-200 ${
+                isActive
+                  ? "border-accent bg-accent-light/40"
+                  : "border-border bg-background-card hover:border-border-hover hover:bg-background-hover"
+              }`}
+            >
+              <Icon className={`w-6 h-6 mx-auto mb-2 ${shortcut.iconClass}`} />
+              <p className="text-sm font-medium text-foreground">{shortcut.label}</p>
+              <Badge variant={isActive ? shortcut.activeBadgeVariant : "default"} className="mt-2">{shortcut.count}</Badge>
+            </button>
+          );
+        })}
+        {shortcutButtons.length < 5 ? <div className="hidden lg:block" aria-hidden="true" /> : null}
       </div>
 
       {selectedMode === "pairs" ? (
