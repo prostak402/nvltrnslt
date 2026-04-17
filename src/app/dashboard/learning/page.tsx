@@ -381,6 +381,7 @@ export default function LearningPage() {
   const currentCard = filteredCards[safeIndex];
   const flashcardsComplete = completedSessionCount !== null;
   const progressCount = flashcardsComplete ? completedSessionCount : Math.min(currentIndex, filteredCards.length);
+  const isEmptySelection = !loading && filteredCards.length === 0 && !flashcardsComplete;
 
   const resetFlashcardSession = () => {
     setShowTranslation(false);
@@ -430,36 +431,6 @@ export default function LearningPage() {
       setIsSubmitting(false);
     }
   };
-
-  if (!loading && filteredCards.length === 0 && !flashcardsComplete) {
-    return (
-      <div className="space-y-8 max-w-4xl mx-auto">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Что повторим сегодня?</h1>
-          <p className="mt-2 text-foreground-secondary">Сейчас нет карточек под выбранные фильтры. Сохрани новые слова в моде, поменяй фильтр или дождись времени следующего повторения.</p>
-        </div>
-        <Card>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm text-foreground-secondary mb-2">Тип карточек</label>
-              <select value={activeKind} onChange={(event) => handleKindChange(event.target.value as KindFilter)} className="w-full rounded-lg border border-border bg-background-hover px-3 py-2.5 text-sm text-foreground focus:outline-none focus:border-accent">
-                <option value="all">Все карточки</option>
-                <option value="word">Только слова</option>
-                <option value="phrase">Только фразы</option>
-                {hasSentenceCards ? <option value="sentence">Только предложения</option> : null}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm text-foreground-secondary mb-2">Новелла</label>
-              <select value={activeNovel} onChange={(event) => handleNovelChange(event.target.value)} className="w-full rounded-lg border border-border bg-background-hover px-3 py-2.5 text-sm text-foreground focus:outline-none focus:border-accent">
-                {availableNovels.map((novel) => <option key={novel}>{novel}</option>)}
-              </select>
-            </div>
-          </div>
-        </Card>
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-8 max-w-6xl mx-auto">
@@ -533,7 +504,34 @@ export default function LearningPage() {
         {shortcutButtons.length < 5 ? <div className="hidden lg:block" aria-hidden="true" /> : null}
       </div>
 
-      {selectedMode === "pairs" ? (
+      {isEmptySelection ? (
+        <Card className="space-y-4">
+          <div className="space-y-2">
+            <h2 className="text-xl font-semibold text-foreground">Под эту подборку пока нет карточек</h2>
+            <p className="text-foreground-secondary">
+              Сохрани новые слова в моде, выбери другую быструю подборку, поменяй фильтр или дождись времени следующего повторения.
+            </p>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="rounded-xl border border-border bg-background-hover px-4 py-3">
+              <p className="text-xs uppercase tracking-wide text-foreground-muted">Тип карточек</p>
+              <p className="mt-1 text-base font-medium text-foreground">
+                {activeKind === "all"
+                  ? "Все карточки"
+                  : activeKind === "word"
+                    ? "Только слова"
+                    : activeKind === "phrase"
+                      ? "Только фразы"
+                      : "Только предложения"}
+              </p>
+            </div>
+            <div className="rounded-xl border border-border bg-background-hover px-4 py-3">
+              <p className="text-xs uppercase tracking-wide text-foreground-muted">Новелла</p>
+              <p className="mt-1 text-base font-medium text-foreground">{activeNovel}</p>
+            </div>
+          </div>
+        </Card>
+      ) : selectedMode === "pairs" ? (
         <PairsTrainer key={`pairs-${filteredIdsKey}`} cards={filteredCards} onReload={reload} />
       ) : flashcardsComplete ? (
         <div className="max-w-2xl mx-auto space-y-8">
