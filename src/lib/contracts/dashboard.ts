@@ -109,21 +109,37 @@ export interface DashboardSettingsResponse {
   emailNotifications: boolean;
 }
 
+export interface DashboardSupportTicketMessage {
+  id: number;
+  authorRole: "user" | "admin";
+  authorName: string;
+  text: string;
+  createdAt: string;
+  createdAtLabel: string;
+}
+
+export interface DashboardSupportTicketListItem {
+  id: number;
+  subject: string;
+  category: SupportCategory;
+  status: TicketStatus;
+  createdAtLabel: string;
+  updatedAtLabel: string;
+  messageCount: number;
+  lastMessagePreview: string | null;
+}
+
 export interface DashboardSupportResponse {
   faqItems: Array<{ q: string; a: string }>;
-  tickets: Array<{
-    id: number;
-    subject: string;
-    category: SupportCategory;
-    status: TicketStatus;
-    createdAtLabel: string;
-    updatedAtLabel: string;
-    messages: Array<{
-      id: number;
-      authorRole: "user" | "admin";
-      authorName: string;
-      text: string;
-      createdAt: string;
-    }>;
-  }>;
+  tickets: DashboardSupportTicketListItem[];
+}
+
+export interface DashboardSupportTicketResponse {
+  id: number;
+  subject: string;
+  category: SupportCategory;
+  status: TicketStatus;
+  createdAtLabel: string;
+  updatedAtLabel: string;
+  messages: DashboardSupportTicketMessage[];
 }

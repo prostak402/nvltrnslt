@@ -1,8 +1,12 @@
 import "server-only";
 
-import { desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 
-import type { DashboardSupportResponse } from "@/lib/contracts/dashboard";
+import type {
+  DashboardSupportResponse,
+  DashboardSupportTicketMessage,
+  DashboardSupportTicketResponse,
+} from "@/lib/contracts/dashboard";
 import { getDb } from "@/lib/db/client";
 import { supportMessages, supportTickets, users } from "@/lib/db/schema";
 import type { SupportCategory, TicketStatus } from "@/lib/types";
@@ -15,35 +19,47 @@ import { sendAlertDelivery } from "./alert-delivery";
 const FAQ_ITEMS = [
   {
     q: "Мод не подключается к серверу",
-    a: "Убедитесь, что у вас стабильное интернет-соединение и что nvl_translate_key.json лежит в папке game/. При необходимости скачайте файл заново в разделе устройств.",
+    a: "Проверьте, что у вас стабильное интернет-соединение и что файл nvl_translate_key.json лежит в папке game/. Если нужно, заново скачайте ключ в разделе устройств.",
   },
   {
     q: "Слова не появляются в кабинете",
-    a: "Проверьте, не накопилась ли очередь оффлайн-синхронизации. Сайт покажет последние события и ошибки в разделе истории.",
+    a: "Проверьте, не накопилась ли очередь офлайн-синхронизации. Последние события и ошибки можно посмотреть в разделе истории.",
   },
   {
     q: "Как восстановить удалённое слово",
-    a: "Удалённые карточки можно импортировать заново из TSV-бэкапа или снова сохранить при чтении новеллы.",
+    a: "Удалённые карточки можно импортировать заново из TSV-экспорта или повторно сохранить во время чтения новеллы.",
   },
   {
     q: "Перевод отображается некорректно",
-    a: "Перевод идёт через серверный proxy на Yandex Cloud. Вы всегда можете поправить перевод или оставить заметку в карточке.",
+    a: "Перевод идёт через серверный proxy на Yandex Cloud. Вы можете отредактировать карточку или описать проблему в тикете, если ошибка повторяется.",
   },
   {
     q: "Как отменить подписку",
-    a: "На этапе MVP реальные списания ещё не включены, но структура тарифов и лимитов уже готова для будущего billing.",
+    a: "На текущем этапе реальные списания ещё могут быть отключены, но сами лимиты и тарифные уровни уже работают так же, как в будущей billing-схеме.",
   },
 ] as const;
 
-function mapSupportMessage(entry: typeof supportMessages.$inferSelect) {
+function messagePreview(text: string) {
+  const normalized = text.replace(/\s+/g, " ").trim();
+  if (!normalized) {
+    return null;
+  }
+
+  return normalized.length > 180
+    ? `${normalized.slice(0, 177).trimEnd()}...`
+    : normalized;
+}
+
+function mapSupportMessage(
+  entry: typeof supportMessages.$inferSelect,
+): DashboardSupportTicketMessage {
   return {
     id: entry.id,
-    ticketId: entry.ticketId,
     authorRole: entry.authorRole as "user" | "admin",
-    authorUserId: entry.authorUserId,
     authorName: entry.authorName,
     text: entry.text,
     createdAt: toIsoString(entry.createdAt) ?? "",
+    createdAtLabel: formatDateTimeRu(entry.createdAt),
   };
 }
 
@@ -56,6 +72,16 @@ function mapSupportTicket(entry: typeof supportTickets.$inferSelect) {
     status: entry.status as TicketStatus,
     createdAt: toIsoString(entry.createdAt) ?? "",
     updatedAt: toIsoString(entry.updatedAt) ?? "",
+  };
+}
+
+function withTicketLabels(entry: typeof supportTickets.$inferSelect) {
+  const ticket = mapSupportTicket(entry);
+
+  return {
+    ...ticket,
+    createdAtLabel: formatDateTimeRu(ticket.createdAt),
+    updatedAtLabel: formatDateTimeRu(ticket.updatedAt),
   };
 }
 
@@ -77,24 +103,77 @@ export async function getSupportPageData(
         .orderBy(supportMessages.createdAt)
     : [];
 
-  const messagesByTicket = new Map<number, ReturnType<typeof mapSupportMessage>[]>();
+  const messageMetaByTicket = new Map<
+    number,
+    { messageCount: number; lastMessagePreview: string | null }
+  >();
+
   for (const message of messages) {
-    const list = messagesByTicket.get(message.ticketId) ?? [];
-    list.push(mapSupportMessage(message));
-    messagesByTicket.set(message.ticketId, list);
+    const current = messageMetaByTicket.get(message.ticketId) ?? {
+      messageCount: 0,
+      lastMessagePreview: null,
+    };
+
+    current.messageCount += 1;
+    current.lastMessagePreview = messagePreview(message.text);
+    messageMetaByTicket.set(message.ticketId, current);
   }
 
   return {
     faqItems: [...FAQ_ITEMS],
     tickets: tickets.map((ticket) => {
-      const normalized = mapSupportTicket(ticket);
+      const normalized = withTicketLabels(ticket);
+      const messageMeta = messageMetaByTicket.get(ticket.id);
+
       return {
-        ...normalized,
-        createdAtLabel: formatDateTimeRu(normalized.createdAt),
-        updatedAtLabel: formatDateTimeRu(normalized.updatedAt),
-        messages: messagesByTicket.get(ticket.id) ?? [],
+        id: normalized.id,
+        subject: normalized.subject,
+        category: normalized.category,
+        status: normalized.status,
+        createdAtLabel: normalized.createdAtLabel,
+        updatedAtLabel: normalized.updatedAtLabel,
+        messageCount: messageMeta?.messageCount ?? 0,
+        lastMessagePreview: messageMeta?.lastMessagePreview ?? null,
       };
     }),
+  };
+}
+
+export async function getSupportTicketPageData(
+  userId: number,
+  ticketId: number,
+): Promise<DashboardSupportTicketResponse | null> {
+  const [ticket] = await getDb()
+    .select()
+    .from(supportTickets)
+    .where(
+      and(
+        eq(supportTickets.id, ticketId),
+        eq(supportTickets.userId, userId),
+      ),
+    )
+    .limit(1);
+
+  if (!ticket) {
+    return null;
+  }
+
+  const messages = await getDb()
+    .select()
+    .from(supportMessages)
+    .where(eq(supportMessages.ticketId, ticketId))
+    .orderBy(supportMessages.createdAt);
+
+  const normalized = withTicketLabels(ticket);
+
+  return {
+    id: normalized.id,
+    subject: normalized.subject,
+    category: normalized.category,
+    status: normalized.status,
+    createdAtLabel: normalized.createdAtLabel,
+    updatedAtLabel: normalized.updatedAtLabel,
+    messages: messages.map(mapSupportMessage),
   };
 }
 
