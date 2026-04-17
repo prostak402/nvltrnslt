@@ -16,6 +16,11 @@ type KindFilter = "all" | "word" | "phrase" | "sentence";
 type LearningShortcut = "newWords" | "hardWords" | "phrases" | "random";
 type ReviewSummary = Record<"know" | "hard" | "unknown", number>;
 type PairFeedback = { kind: "success" | "error"; leftId: number; rightId: number } | null;
+type PendingFlashcardAdvance = {
+  reviewedCardId: number;
+  previousIndex: number;
+  previousLength: number;
+} | null;
 
 const ALL_NOVELS_LABEL = "Все новеллы";
 const PAIRS_ACTIVE_SLOTS = 5;
@@ -310,6 +315,7 @@ export default function LearningPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [message, setMessage] = useState("");
   const [completedSessionCount, setCompletedSessionCount] = useState<number | null>(null);
+  const [pendingAdvance, setPendingAdvance] = useState<PendingFlashcardAdvance>(null);
 
   const availableNovels = data.novels.length > 0 ? data.novels : [ALL_NOVELS_LABEL];
   const activeNovel = availableNovels.includes(selectedNovel) ? selectedNovel : availableNovels[0];
@@ -389,7 +395,27 @@ export default function LearningPage() {
     setSessionSummary(createSummary());
     setMessage("");
     setCompletedSessionCount(null);
+    setPendingAdvance(null);
   };
+
+  useEffect(() => {
+    if (!pendingAdvance || loading) return;
+
+    const sessionCompleted = pendingAdvance.previousIndex + 1 >= pendingAdvance.previousLength;
+    if (sessionCompleted) {
+      setCompletedSessionCount(pendingAdvance.previousLength);
+      setPendingAdvance(null);
+      return;
+    }
+
+    const reviewedCardStillVisible = filteredCards.some((card) => card.id === pendingAdvance.reviewedCardId);
+    const nextIndex = reviewedCardStillVisible
+      ? pendingAdvance.previousIndex + 1
+      : pendingAdvance.previousIndex;
+
+    setCurrentIndex(Math.min(nextIndex, Math.max(filteredCards.length - 1, 0)));
+    setPendingAdvance(null);
+  }, [filteredCards, loading, pendingAdvance]);
 
   const handleKindChange = (nextKind: KindFilter) => {
     setSelectedKind(nextKind);
@@ -414,7 +440,8 @@ export default function LearningPage() {
 
   const submitReview = async (rating: "know" | "hard" | "unknown") => {
     if (!currentCard) return;
-    const willComplete = currentIndex + 1 >= filteredCards.length;
+    const previousIndex = currentIndex;
+    const previousLength = filteredCards.length;
 
     try {
       setIsSubmitting(true);
@@ -422,10 +449,14 @@ export default function LearningPage() {
       await apiSend("/api/dashboard/review", "POST", { itemId: currentCard.id, rating });
       setSessionSummary((current) => ({ ...current, [rating]: current[rating] + 1 }));
       setShowTranslation(false);
-      setCurrentIndex((index) => index + 1);
-      if (willComplete) setCompletedSessionCount(filteredCards.length);
+      setPendingAdvance({
+        reviewedCardId: currentCard.id,
+        previousIndex,
+        previousLength,
+      });
       await reload();
     } catch (requestError) {
+      setPendingAdvance(null);
       setMessage(requestError instanceof Error ? requestError.message : "Не удалось сохранить результат повторения.");
     } finally {
       setIsSubmitting(false);
