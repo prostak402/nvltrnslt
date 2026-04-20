@@ -81,6 +81,7 @@ export function mapUserSettingsRow(row: UserSettingsRow): UserSettingsRecord {
   return {
     userId: row.userId,
     dailyWords: row.dailyWords,
+    dailyNewWords: row.dailyNewWords,
     prioritizeDifficult: row.prioritizeDifficult,
     includePhrases: row.includePhrases,
     autoSync: row.autoSync,

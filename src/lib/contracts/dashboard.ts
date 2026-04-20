@@ -101,6 +101,7 @@ export interface DashboardShellSummary {
 export interface DashboardSettingsResponse {
   email: string;
   dailyWords: number;
+  dailyNewWords: number;
   prioritizeDifficult: boolean;
   includePhrases: boolean;
   autoSync: boolean;

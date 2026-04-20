@@ -2,7 +2,12 @@ import "server-only";
 
 import { and, desc, eq } from "drizzle-orm";
 
-import { REVIEW_INTERVALS } from "@/lib/config";
+import {
+  activateLearningItem,
+  applyLearningReview,
+  buildLearningQueue,
+  canBuildCloze,
+} from "@/lib/server/learning-domain";
 import type {
   DashboardHistoryResponse,
   DashboardOverviewResponse,
@@ -22,14 +27,13 @@ import {
 import type {
   ReviewEventRecord,
   ReviewRating,
+  ReviewTaskType,
   StudyItemOccurrenceRecord,
   StudyItemRecord,
   StudyStatus,
   UserSettingsRecord,
 } from "@/lib/types";
 import {
-  addDays,
-  addHours,
   average,
   formatDateRu,
   formatDateTimeRu,
@@ -52,6 +56,7 @@ import { getAdminSettingsRecord } from "./site-settings";
 const DEFAULT_LEARNING_SETTINGS: UserSettingsRecord = {
   userId: 0,
   dailyWords: 20,
+  dailyNewWords: 10,
   prioritizeDifficult: true,
   includePhrases: true,
   autoSync: true,
@@ -70,7 +75,12 @@ function mapStudyItemRow(row: typeof studyItems.$inferSelect): StudyItemRecord {
     translation: row.translation,
     note: row.note,
     status: row.status as StudyStatus,
+    isActive: row.isActive,
+    learningStage: row.learningStage,
+    activatedAt: toIsoString(row.activatedAt),
+    lastAnswerAt: toIsoString(row.lastAnswerAt),
     correctStreak: row.correctStreak,
+    wrongCount: row.wrongCount,
     repetitions: row.repetitions,
     totalViews: row.totalViews,
     nextReviewAt: toIsoString(row.nextReviewAt) ?? "",
@@ -99,40 +109,10 @@ function mapReviewRow(row: typeof reviewEvents.$inferSelect): ReviewEventRecord 
     userId: row.userId,
     studyItemId: row.studyItemId,
     rating: row.rating as ReviewRating,
+    taskType: row.taskType as ReviewTaskType | null,
     beforeStatus: row.beforeStatus as StudyStatus,
     afterStatus: row.afterStatus as StudyStatus,
     reviewedAt: toIsoString(row.reviewedAt) ?? "",
-  };
-}
-
-function computeNextReview(
-  status: StudyStatus,
-  correctStreak: number,
-  rating: ReviewRating,
-  currentIso: string,
-) {
-  if (rating === "unknown") {
-    return {
-      nextReviewAt: addHours(currentIso, REVIEW_INTERVALS.unknownHours),
-      status: "new" as const,
-      correctStreak: 0,
-    };
-  }
-
-  if (rating === "hard") {
-    return {
-      nextReviewAt: addDays(currentIso, REVIEW_INTERVALS.hardDays),
-      status: "hard" as const,
-      correctStreak: Math.max(correctStreak, 1),
-    };
-  }
-
-  const nextStreak = correctStreak + 1;
-  const dayIndex = Math.min(nextStreak - 1, REVIEW_INTERVALS.knowDays.length - 1);
-  return {
-    nextReviewAt: addDays(currentIso, REVIEW_INTERVALS.knowDays[dayIndex]),
-    status: nextStreak >= REVIEW_INTERVALS.learnedThreshold ? ("learned" as const) : status,
-    correctStreak: nextStreak,
   };
 }
 
@@ -163,10 +143,19 @@ function buildStudyItemMeta(
     date: formatDateRu(item.createdAt),
     relativeDate: formatRelativeDateRu(item.createdAt),
     status: item.status,
+    isActive: item.isActive,
+    learningStage: item.learningStage,
+    activatedAt: item.activatedAt,
+    lastAnswerAt: item.lastAnswerAt,
+    wrongCount: item.wrongCount,
     note: item.note,
     repetitions: item.repetitions,
     kind: item.kind,
     nextReviewAt: item.nextReviewAt,
+    isDue:
+      item.isActive &&
+      item.status !== "learned" &&
+      item.nextReviewAt <= nowIso(),
   };
 }
 
@@ -235,7 +224,12 @@ export async function getDashboardOverview(
   const phrases = items.filter((entry) => entry.kind === "phrase");
   const latestByItemId = latestOccurrenceMap(occurrences);
   const todayKey = startOfDayKey();
-  const dueItems = items.filter((entry) => entry.nextReviewAt <= nowIso()).length;
+  const dueItems = items.filter(
+    (entry) =>
+      entry.isActive &&
+      entry.status !== "learned" &&
+      entry.nextReviewAt <= nowIso(),
+  ).length;
 
   const recentWords = words
     .slice()
@@ -328,6 +322,7 @@ export async function updateStudyItem(
     translation: string;
     note: string;
     status: StudyStatus;
+    isActive: boolean;
   }>,
 ) {
   return getDb().transaction(async (tx) => {
@@ -341,12 +336,51 @@ export async function updateStudyItem(
       throw new Error("ITEM_NOT_FOUND");
     }
 
+    if (patch.status === "learned") {
+      throw new Error("STATUS_PATCH_NOT_ALLOWED");
+    }
+
+    const mappedItem = mapStudyItemRow(existingItem);
+    const shouldActivate = patch.isActive === true && !existingItem.isActive && existingItem.status !== "learned";
+    const activationPatch = shouldActivate ? activateLearningItem(mappedItem, new Date()) : null;
+    const nextStatus =
+      patch.status !== undefined
+        ? patch.status
+        : patch.isActive === true && existingItem.status === "hard"
+          ? existingItem.status
+          : existingItem.status;
+    const statusForUpdate = nextStatus === "hard" ? "hard" : existingItem.status;
+    const nextIsActive =
+      patch.status === "hard"
+        ? true
+        : patch.isActive !== undefined
+          ? patch.isActive && existingItem.status !== "learned"
+          : activationPatch?.isActive ?? existingItem.isActive;
+    const nextReviewAt =
+      patch.status === "hard"
+        ? new Date()
+        : activationPatch?.nextReviewAt
+          ? new Date(activationPatch.nextReviewAt)
+          : existingItem.nextReviewAt;
+    const nextActivatedAt =
+      activationPatch?.activatedAt !== undefined
+        ? (activationPatch.activatedAt ? new Date(activationPatch.activatedAt) : null)
+        : existingItem.activatedAt;
+    const nextLearningStage =
+      patch.status === "hard"
+        ? Math.max(existingItem.learningStage, 0)
+        : activationPatch?.learningStage ?? existingItem.learningStage;
+
     const [updatedItem] = await tx
       .update(studyItems)
       .set({
         translation: patch.translation !== undefined ? patch.translation.trim() : existingItem.translation,
         note: patch.note !== undefined ? patch.note.trim() : existingItem.note,
-        status: patch.status !== undefined ? patch.status : existingItem.status,
+        status: statusForUpdate,
+        isActive: nextIsActive,
+        learningStage: nextLearningStage,
+        activatedAt: nextActivatedAt,
+        nextReviewAt,
         updatedAt: new Date(),
       })
       .where(eq(studyItems.id, itemId))
@@ -390,60 +424,99 @@ export async function deleteStudyItem(userId: number, itemId: number) {
 }
 
 export async function getLearningPageData(userId: number) {
-  const [settings, itemRows, occurrenceRows] = await Promise.all([
-    findSettings(getDb(), userId),
-    getDb().select().from(studyItems).where(eq(studyItems.userId, userId)),
-    getDb().select().from(studyItemOccurrences).where(eq(studyItemOccurrences.userId, userId)),
-  ]);
+  return getDb().transaction(async (tx) => {
+    const [settings, itemRows, occurrenceRows] = await Promise.all([
+      findSettings(tx, userId),
+      tx.select().from(studyItems).where(eq(studyItems.userId, userId)),
+      tx.select().from(studyItemOccurrences).where(eq(studyItemOccurrences.userId, userId)),
+    ]);
 
-  const resolvedSettings = settings
-    ? settings
-    : {
-        ...DEFAULT_LEARNING_SETTINGS,
-        userId,
+    const resolvedSettings = settings
+      ? settings
+      : {
+          ...DEFAULT_LEARNING_SETTINGS,
+          userId,
+        };
+    const latestByItemId = latestOccurrenceMap(occurrenceRows.map(mapOccurrenceRow));
+    const allItems = itemRows
+      .map(mapStudyItemRow)
+      .map((item) => ({
+        ...item,
+        hasContext: Boolean((latestByItemId.get(item.id)?.contextOriginal ?? "").trim()),
+      }))
+      .sort((a, b) => a.nextReviewAt.localeCompare(b.nextReviewAt));
+    const queue = buildLearningQueue(allItems, resolvedSettings, new Date());
+    const activationNow = new Date();
+    const activatedPatches = new Map<number, ReturnType<typeof activateLearningItem>>();
+
+    for (const item of queue.itemsToActivate) {
+      const activation = activateLearningItem(item, activationNow);
+      activatedPatches.set(item.id, activation);
+
+      await tx
+        .update(studyItems)
+        .set({
+          isActive: activation.isActive,
+          learningStage: activation.learningStage,
+          activatedAt: activation.activatedAt ? new Date(activation.activatedAt) : null,
+          correctStreak: activation.correctStreak,
+          wrongCount: activation.wrongCount,
+          nextReviewAt: new Date(activation.nextReviewAt),
+          updatedAt: activationNow,
+        })
+        .where(eq(studyItems.id, item.id));
+    }
+
+    const queueItems = queue.queueItems.map((item) => {
+      const patch = activatedPatches.get(item.id);
+      return patch ? { ...item, ...patch } : item;
+    });
+
+    const cards = queueItems.map((item) => {
+      const latestOccurrence = latestByItemId.get(item.id);
+      const context = latestOccurrence?.contextOriginal ?? "";
+      return {
+        id: item.id,
+        en: item.text,
+        ru: item.translation,
+        context,
+        contextTranslation: latestOccurrence?.contextTranslation ?? "",
+        kind: item.kind,
+        novel: latestOccurrence?.novelTitle ?? "Не указано",
+        status: item.status,
+        isActive: item.isActive,
+        isDue: item.isActive && item.status !== "learned" && item.nextReviewAt <= nowIso(),
+        learningStage: item.learningStage,
+        hasCloze: canBuildCloze(item.text, context),
       };
-  const currentTime = nowIso();
-  const allItems = itemRows
-    .map(mapStudyItemRow)
-    .sort((a, b) => a.nextReviewAt.localeCompare(b.nextReviewAt));
-  const availableForLearning = allItems.filter(
-    (entry) => entry.status === "new" || entry.nextReviewAt <= currentTime,
-  );
-  const fallbackLimit = Math.max(resolvedSettings.dailyWords, 10);
-  const items = availableForLearning.length
-    ? availableForLearning
-    : [...allItems]
-        .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-        .slice(0, fallbackLimit);
-  const latestByItemId = latestOccurrenceMap(occurrenceRows.map(mapOccurrenceRow));
+    });
 
-  const cards = items.map((item) => {
-    const latestOccurrence = latestByItemId.get(item.id);
     return {
-      id: item.id,
-      en: item.text,
-      ru: item.translation,
-      context: latestOccurrence?.contextOriginal ?? "",
-      kind: item.kind,
-      novel: latestOccurrence?.novelTitle ?? "Не указано",
-      status: item.status,
+      cards,
+      summary: {
+        dueCount: queue.dueCount,
+        hardDueCount: queue.hardDueCount,
+        newCount: queue.newCount,
+        totalCount: cards.length,
+      },
+      categories: [
+        { label: "Новые слова", count: cards.filter((entry) => entry.kind === "word" && entry.status === "new").length },
+        { label: "Сложные слова", count: cards.filter((entry) => entry.kind === "word" && entry.status === "hard").length },
+        { label: "Фразы", count: cards.filter((entry) => entry.kind === "phrase").length },
+        { label: "Случайная подборка", count: cards.length },
+      ],
+      novels: ["Все новеллы", ...new Set(cards.map((card) => card.novel))],
+      settings: resolvedSettings,
     };
   });
-
-  return {
-    cards,
-    categories: [
-      { label: "Новые слова", count: items.filter((entry) => entry.kind === "word" && entry.status === "new").length },
-      { label: "Сложные слова", count: items.filter((entry) => entry.kind === "word" && entry.status === "hard").length },
-      { label: "Фразы", count: items.filter((entry) => entry.kind === "phrase").length },
-      { label: "Случайная подборка", count: items.length },
-    ],
-    novels: ["Все новеллы", ...new Set(cards.map((card) => card.novel))],
-    settings: resolvedSettings,
-  };
 }
 
-export async function recordReview(userId: number, itemId: number, rating: ReviewRating) {
+export async function recordReview(
+  userId: number,
+  itemId: number,
+  rating: ReviewRating,
+  taskType: ReviewTaskType,
+) {
   return getDb().transaction(async (tx) => {
     const [item] = await tx
       .select()
@@ -456,19 +529,24 @@ export async function recordReview(userId: number, itemId: number, rating: Revie
     }
 
     const currentIso = nowIso();
-    const update = computeNextReview(
-      item.status as StudyStatus,
-      item.correctStreak,
+    const update = applyLearningReview({
+      item: mapStudyItemRow(item),
       rating,
-      currentIso,
-    );
+      taskType,
+      now: new Date(currentIso),
+    });
 
     const [updatedItem] = await tx
       .update(studyItems)
       .set({
         status: update.status,
+        isActive: update.isActive,
+        learningStage: update.learningStage,
+        activatedAt: update.activatedAt ? new Date(update.activatedAt) : null,
+        lastAnswerAt: new Date(update.lastAnswerAt),
         correctStreak: update.correctStreak,
-        repetitions: item.repetitions + 1,
+        wrongCount: update.wrongCount,
+        repetitions: update.repetitions,
         nextReviewAt: new Date(update.nextReviewAt),
         updatedAt: new Date(currentIso),
       })
@@ -479,6 +557,7 @@ export async function recordReview(userId: number, itemId: number, rating: Revie
       userId,
       studyItemId: itemId,
       rating,
+      taskType,
       beforeStatus: item.status,
       afterStatus: update.status,
       reviewedAt: new Date(currentIso),
@@ -525,7 +604,12 @@ export async function getProgressPageData(
     };
   });
 
-  const dueItems = items.filter((entry) => entry.nextReviewAt <= nowIso()).length;
+  const dueItems = items.filter(
+    (entry) =>
+      entry.isActive &&
+      entry.status !== "learned" &&
+      entry.nextReviewAt <= nowIso(),
+  ).length;
   const recentReviewScores = reviews
     .slice(0, 10)
     .map((review) => (review.rating === "know" ? 1 : review.rating === "hard" ? 0.6 : 0.2));
@@ -598,6 +682,7 @@ export async function saveSettings(
   userId: number,
   input: {
     dailyWords: number;
+    dailyNewWords: number;
     prioritizeDifficult: boolean;
     includePhrases: boolean;
     autoSync: boolean;
@@ -612,6 +697,7 @@ export async function saveSettings(
       .update(userSettings)
       .set({
         dailyWords: input.dailyWords,
+        dailyNewWords: input.dailyNewWords,
         prioritizeDifficult: input.prioritizeDifficult,
         includePhrases: input.includePhrases,
         autoSync: input.autoSync,
@@ -636,6 +722,7 @@ export async function saveSettings(
     return {
       email: user.email,
       dailyWords: settings.dailyWords,
+      dailyNewWords: settings.dailyNewWords,
       prioritizeDifficult: settings.prioritizeDifficult,
       includePhrases: settings.includePhrases,
       autoSync: settings.autoSync,
@@ -645,3 +732,5 @@ export async function saveSettings(
     };
   });
 }
+
+

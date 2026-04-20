@@ -29,6 +29,13 @@
       "when": 1776284421923,
       "tag": "20260415202021_remove_interface_language",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1776716884524,
+      "tag": "20260420202804_study_srs_mvp",
+      "breakpoints": true
     }
   ]
 }

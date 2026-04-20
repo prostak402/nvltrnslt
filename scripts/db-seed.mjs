@@ -151,6 +151,7 @@ async function main() {
         insert into user_settings (
           user_id,
           daily_words,
+          daily_new_words,
           prioritize_difficult,
           include_phrases,
           auto_sync,
@@ -161,6 +162,7 @@ async function main() {
         values (
           ${userRow.id},
           20,
+          10,
           true,
           true,
           true,

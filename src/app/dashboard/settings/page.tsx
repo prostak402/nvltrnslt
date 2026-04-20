@@ -16,6 +16,7 @@ type PasswordForm = {
 const initialData: DashboardSettingsResponse = {
   email: "",
   dailyWords: 20,
+  dailyNewWords: 10,
   prioritizeDifficult: true,
   includePhrases: true,
   autoSync: true,
@@ -217,6 +218,31 @@ export default function SettingsPage() {
               <div className="mt-1 flex justify-between text-xs text-foreground-muted">
                 <span>5</span>
                 <span>50</span>
+              </div>
+            </div>
+
+            <div>
+              <div className="mb-2 flex items-center justify-between">
+                <label className="text-sm">����� ���� � ����</label>
+                <span className="text-sm font-medium text-accent">{form.dailyNewWords}</span>
+              </div>
+              <input
+                type="range"
+                min={1}
+                max={20}
+                step={1}
+                value={form.dailyNewWords}
+                onChange={(event) =>
+                  setForm((current) => ({
+                    ...current,
+                    dailyNewWords: Number(event.target.value),
+                  }))
+                }
+                className="h-2 w-full cursor-pointer appearance-none rounded-full bg-background-hover accent-accent"
+              />
+              <div className="mt-1 flex justify-between text-xs text-foreground-muted">
+                <span>1</span>
+                <span>20</span>
               </div>
             </div>
 

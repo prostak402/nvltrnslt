@@ -22,6 +22,7 @@ export async function POST(request: NextRequest) {
     return ok(
       await saveSettings(user.id, {
         dailyWords: body.dailyWords,
+        dailyNewWords: body.dailyNewWords,
         prioritizeDifficult: body.prioritizeDifficult,
         includePhrases: body.includePhrases,
         autoSync: body.autoSync,

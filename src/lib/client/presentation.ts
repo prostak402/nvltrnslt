@@ -39,6 +39,22 @@ export const supportCategoryLabels = {
   other: "Другое",
 };
 
+export function studyQueueMeta(item: { status: "new" | "hard" | "learned"; isActive: boolean; isDue: boolean }) {
+  if (item.status === "learned") {
+    return { label: "Изучено", variant: "success" as const };
+  }
+
+  if (item.isDue) {
+    return { label: "Повторить сегодня", variant: "warning" as const };
+  }
+
+  if (item.isActive) {
+    return { label: "В изучении", variant: "accent" as const };
+  }
+
+  return { label: "Добавлено в словарь", variant: "default" as const };
+}
+
 export function planLabel(plan: PlanId) {
   return PLANS[plan].label;
 }

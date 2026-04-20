@@ -6,7 +6,7 @@ import { Search, Filter, BookOpen, ChevronDown, ChevronUp, MessageSquare, Trash2
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { apiSend, useApiData } from "@/lib/client/api";
-import { studyStatusMeta } from "@/lib/client/presentation";
+import { studyQueueMeta, studyStatusMeta } from "@/lib/client/presentation";
 
 type PhraseRecord = {
   id: number;
@@ -18,6 +18,8 @@ type PhraseRecord = {
   date: string;
   relativeDate: string;
   status: "new" | "hard" | "learned";
+  isActive: boolean;
+  isDue: boolean;
   note: string;
   repetitions: number;
 };
@@ -60,7 +62,7 @@ export default function PhrasesPage() {
     [data.phrases, search, selectedNovel],
   );
 
-  const updatePhrase = async (phraseId: number, patch: { status?: PhraseRecord["status"] }) => {
+  const updatePhrase = async (phraseId: number, patch: { status?: PhraseRecord["status"]; isActive?: boolean }) => {
     try {
       setPendingId(phraseId);
       setMessage("");
@@ -143,6 +145,7 @@ export default function PhrasesPage() {
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
                   <Badge variant={studyStatusMeta[phrase.status].variant}>{studyStatusMeta[phrase.status].label}</Badge>
+                  <Badge variant={studyQueueMeta(phrase).variant}>{studyQueueMeta(phrase).label}</Badge>
                   {expandedId === phrase.id ? (
                     <ChevronUp className="w-4 h-4 text-foreground-muted" />
                   ) : (
@@ -189,14 +192,16 @@ export default function PhrasesPage() {
                   >
                     В сложные
                   </button>
-                  <button
-                    type="button"
-                    disabled={pendingId === phrase.id}
-                    onClick={() => void updatePhrase(phrase.id, { status: "learned" })}
-                    className="px-3 py-1.5 text-sm rounded-lg bg-success/15 text-success hover:bg-success/25 transition-colors disabled:opacity-60"
-                  >
-                    Выучено
-                  </button>
+                  {!phrase.isActive && phrase.status !== "learned" ? (
+                    <button
+                      type="button"
+                      disabled={pendingId === phrase.id}
+                      onClick={() => void updatePhrase(phrase.id, { isActive: true })}
+                      className="px-3 py-1.5 text-sm rounded-lg bg-accent-light text-accent hover:bg-accent/20 transition-colors disabled:opacity-60"
+                    >
+                      �������� � ��������
+                    </button>
+                  ) : null}
                   <Button variant="secondary" size="sm" href="/dashboard/learning">
                     <MessageSquare className="w-4 h-4 mr-1.5" />
                     В обучение

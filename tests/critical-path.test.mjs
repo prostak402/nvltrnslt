@@ -188,6 +188,7 @@ test("critical HTTP path covers auth, mod flow, review, support, and admin auth"
     json: {
       itemId,
       rating: "know",
+      taskType: "flashcards",
     },
   });
 
@@ -538,6 +539,7 @@ test("breadth HTTP path covers dashboard, public, study CRUD, mod link, and admi
     method: "POST",
     json: {
       dailyWords: 25,
+      dailyNewWords: 7,
       prioritizeDifficult: false,
       includePhrases: true,
       autoSync: false,
@@ -549,6 +551,7 @@ test("breadth HTTP path covers dashboard, public, study CRUD, mod link, and admi
 
   assert.equal(saveSettingsResponse.status, 200);
   assert.equal(saveSettingsResponse.json?.data?.dailyWords, 25);
+  assert.equal(saveSettingsResponse.json?.data?.dailyNewWords, 7);
   assert.equal(saveSettingsResponse.json?.data?.poorConnection, "retry");
 
   const settingsAfterSaveResponse = await user.request({
@@ -556,6 +559,7 @@ test("breadth HTTP path covers dashboard, public, study CRUD, mod link, and admi
   });
   assert.equal(settingsAfterSaveResponse.status, 200);
   assert.equal(settingsAfterSaveResponse.json?.data?.dailyWords, 25);
+  assert.equal(settingsAfterSaveResponse.json?.data?.dailyNewWords, 7);
   assert.equal(settingsAfterSaveResponse.json?.data?.autoSync, false);
 
   const invalidPasswordChangeResponse = await user.request({

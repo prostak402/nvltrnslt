@@ -9,7 +9,7 @@ export async function POST(request: NextRequest) {
   try {
     const user = await requireUser();
     const body = await parseJson(request, reviewBodySchema);
-    return ok(await recordReview(user.id, body.itemId, body.rating));
+    return ok(await recordReview(user.id, body.itemId, body.rating, body.taskType));
   } catch (error) {
     return failForRouteError(error, "REVIEW_FAILED", 400);
   }

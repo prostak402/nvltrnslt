@@ -21,7 +21,7 @@ import {
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { apiSend, useApiData } from "@/lib/client/api";
-import { studyStatusMeta } from "@/lib/client/presentation";
+import { studyQueueMeta, studyStatusMeta } from "@/lib/client/presentation";
 
 type WordRecord = {
   id: number;
@@ -33,6 +33,9 @@ type WordRecord = {
   date: string;
   relativeDate: string;
   status: "new" | "hard" | "learned";
+  isActive: boolean;
+  isDue: boolean;
+  learningStage: number;
   note: string;
   repetitions: number;
   nextReviewAt: string;
@@ -128,7 +131,7 @@ export default function WordsPage() {
     setMessage("");
   }, [selectedWord]);
 
-  const savePatch = async (patch: Partial<Pick<WordRecord, "translation" | "note" | "status">>) => {
+  const savePatch = async (patch: Partial<Pick<WordRecord, "translation" | "note" | "status" | "isActive">>) => {
     if (!selectedWord) return;
     try {
       setIsSaving(true);
@@ -266,7 +269,10 @@ export default function WordsPage() {
                     <td className="px-4 py-3 text-foreground-secondary text-sm hidden md:table-cell">{word.novel}</td>
                     <td className="px-4 py-3 text-foreground-muted text-sm hidden sm:table-cell">{word.relativeDate}</td>
                     <td className="px-4 py-3">
-                      <Badge variant={studyStatusMeta[word.status].variant}>{studyStatusMeta[word.status].label}</Badge>
+                      <div className="flex flex-wrap gap-1.5">
+                        <Badge variant={studyStatusMeta[word.status].variant}>{studyStatusMeta[word.status].label}</Badge>
+                        <Badge variant={studyQueueMeta(word).variant}>{studyQueueMeta(word).label}</Badge>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -292,7 +298,10 @@ export default function WordsPage() {
               >
                 <div className="flex items-center justify-between mb-2 gap-3">
                   <span className="font-bold text-lg truncate">{word.word}</span>
-                  <Badge variant={studyStatusMeta[word.status].variant}>{studyStatusMeta[word.status].label}</Badge>
+                  <div className="flex flex-wrap gap-1.5 justify-end">
+                    <Badge variant={studyStatusMeta[word.status].variant}>{studyStatusMeta[word.status].label}</Badge>
+                    <Badge variant={studyQueueMeta(word).variant}>{studyQueueMeta(word).label}</Badge>
+                  </div>
                 </div>
                 <p className="text-foreground-secondary mb-2">{word.translation}</p>
                 <p className="text-foreground-muted text-sm mb-3 line-clamp-2">{word.context}</p>
@@ -346,7 +355,13 @@ export default function WordsPage() {
         <div className="hidden lg:block w-[360px] flex-shrink-0">
           <div className="sticky top-6 bg-background-card border border-border rounded-xl p-6">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold">{selectedWord.word}</h2>
+              <div className="space-y-2">
+                <h2 className="text-xl font-bold">{selectedWord.word}</h2>
+                <div className="flex flex-wrap gap-1.5">
+                  <Badge variant={studyStatusMeta[selectedWord.status].variant}>{studyStatusMeta[selectedWord.status].label}</Badge>
+                  <Badge variant={studyQueueMeta(selectedWord).variant}>{studyQueueMeta(selectedWord).label}</Badge>
+                </div>
+              </div>
               <button type="button" onClick={() => setSelectedWordId(null)} className="text-foreground-muted hover:text-foreground">
                 <X className="w-5 h-5" />
               </button>
@@ -413,13 +428,15 @@ export default function WordsPage() {
                   <MessageSquare className="w-4 h-4 mr-2 text-accent" />
                   Сохранить перевод и заметку
                 </Button>
-                <button
-                  type="button"
-                  onClick={() => void savePatch({ status: "learned" })}
-                  className="w-full flex items-center gap-2 px-4 py-2.5 rounded-lg bg-success/15 text-success hover:bg-success/25 transition-colors text-sm"
-                >
-                  <Check className="w-4 h-4" /> Отметить как выученное
-                </button>
+                {!selectedWord.isActive && selectedWord.status !== "learned" ? (
+                  <button
+                    type="button"
+                    onClick={() => void savePatch({ isActive: true })}
+                    className="w-full flex items-center gap-2 px-4 py-2.5 rounded-lg bg-accent-light text-accent hover:bg-accent/20 transition-colors text-sm"
+                  >
+                    <Check className="w-4 h-4" /> �������� � ��������
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   onClick={() => void savePatch({ status: "hard" })}

@@ -299,6 +299,7 @@ export async function registerUser(input: {
         await tx.insert(userSettings).values({
           userId: userRow.id,
           dailyWords: 20,
+          dailyNewWords: 10,
           prioritizeDifficult: true,
           includePhrases: true,
           autoSync: true,

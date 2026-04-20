@@ -9,9 +9,38 @@ import { Card } from "@/components/ui/Card";
 import { apiSend, useApiData } from "@/lib/client/api";
 import { studyStatusMeta } from "@/lib/client/presentation";
 
-type LearningCard = { id: number; en: string; ru: string; context: string; kind: "word" | "phrase" | "sentence"; novel: string; status: "new" | "hard" | "learned" };
-type LearningResponse = { cards: LearningCard[]; categories: Array<{ label: string; count: number }>; novels: string[]; settings: { dailyWords: number; prioritizeDifficult: boolean; includePhrases: boolean } };
-type LearningMode = "flashcards" | "pairs";
+type LearningCard = {
+  id: number;
+  en: string;
+  ru: string;
+  context: string;
+  contextTranslation: string;
+  kind: "word" | "phrase" | "sentence";
+  novel: string;
+  status: "new" | "hard" | "learned";
+  isActive: boolean;
+  isDue: boolean;
+  learningStage: number;
+  hasCloze: boolean;
+};
+type LearningResponse = {
+  cards: LearningCard[];
+  categories: Array<{ label: string; count: number }>;
+  novels: string[];
+  summary: {
+    dueCount: number;
+    hardDueCount: number;
+    newCount: number;
+    totalCount: number;
+  };
+  settings: {
+    dailyWords: number;
+    dailyNewWords: number;
+    prioritizeDifficult: boolean;
+    includePhrases: boolean;
+  };
+};
+type LearningMode = "flashcards" | "pairs" | "ru_en_choice" | "cloze_choice";
 type KindFilter = "all" | "word" | "phrase" | "sentence";
 type LearningShortcut = "newWords" | "hardWords" | "phrases" | "random";
 type ReviewSummary = Record<"know" | "hard" | "unknown", number>;
@@ -25,10 +54,67 @@ type PendingFlashcardAdvance = {
 const ALL_NOVELS_LABEL = "Все новеллы";
 const PAIRS_ACTIVE_SLOTS = 5;
 const PAIRS_ROUND_SECONDS = 60;
-const initialData: LearningResponse = { cards: [], categories: [], novels: [ALL_NOVELS_LABEL], settings: { dailyWords: 20, prioritizeDifficult: true, includePhrases: true } };
+const initialData: LearningResponse = {
+  cards: [],
+  categories: [],
+  novels: [ALL_NOVELS_LABEL],
+  summary: { dueCount: 0, hardDueCount: 0, newCount: 0, totalCount: 0 },
+  settings: { dailyWords: 20, dailyNewWords: 10, prioritizeDifficult: true, includePhrases: true },
+};
 
 const createSummary = (): ReviewSummary => ({ know: 0, hard: 0, unknown: 0 });
 const kindLabel = (kind: LearningCard["kind"]) => kind === "phrase" ? "Фраза" : kind === "sentence" ? "Предложение" : "Слово";
+
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function buildClozeText(card: LearningCard) {
+  if (!card.hasCloze || !card.context.trim()) {
+    return null;
+  }
+
+  const pattern = new RegExp(escapeRegExp(card.en), "i");
+  if (!pattern.test(card.context)) {
+    return null;
+  }
+
+  return card.context.replace(pattern, "______");
+}
+
+function buildChoiceOptions(cards: LearningCard[], currentCard: LearningCard) {
+  const preferredCandidates = cards.filter(
+    (card) =>
+      card.id !== currentCard.id &&
+      card.kind === currentCard.kind &&
+      card.ru.trim().toLowerCase() !== currentCard.ru.trim().toLowerCase(),
+  );
+  const fallbackCandidates = cards.filter(
+    (card) =>
+      card.id !== currentCard.id &&
+      card.ru.trim().toLowerCase() !== currentCard.ru.trim().toLowerCase(),
+  );
+  const distractorPool = preferredCandidates.length >= 3 ? preferredCandidates : fallbackCandidates;
+  const distractors = shuffle(distractorPool, currentCard.id * 97 + cards.length)
+    .slice(0, Math.min(3, distractorPool.length))
+    .map((card) => ({
+      id: `wrong-${card.id}`,
+      label: card.en,
+      isCorrect: false,
+    }));
+
+  return shuffle(
+    [
+      {
+        id: `correct-${currentCard.id}`,
+        label: currentCard.en,
+        isCorrect: true,
+      },
+      ...distractors,
+    ],
+    currentCard.id * 193 + distractors.length * 17,
+  );
+}
 
 function cardsForShortcut(cards: LearningCard[], shortcut: LearningShortcut) {
   if (shortcut === "newWords") {
@@ -152,7 +238,11 @@ function PairsTrainer({ cards, onReload }: { cards: LearningCard[]; onReload: ()
         });
         if (nextId !== null) setQueueIndex(queueIndex + 1);
         setSyncingCount((current) => current + 1);
-        void apiSend("/api/dashboard/review", "POST", { itemId: leftId, rating })
+        void apiSend("/api/dashboard/review", "POST", {
+          itemId: leftId,
+          rating,
+          taskType: "pairs",
+        })
           .then(() => { if (mountedRef.current) setMessage(""); })
           .catch((requestError) => {
             if (mountedRef.current) {
@@ -385,6 +475,15 @@ export default function LearningPage() {
   const filteredIdsKey = filteredCards.map((card) => card.id).join("-") || "empty";
   const safeIndex = Math.min(currentIndex, Math.max(filteredCards.length - 1, 0));
   const currentCard = filteredCards[safeIndex];
+  const effectiveMode =
+    selectedMode === "cloze_choice" && currentCard && !currentCard.hasCloze
+      ? "ru_en_choice"
+      : selectedMode;
+  const clozePrompt = currentCard ? buildClozeText(currentCard) : null;
+  const choiceOptions = useMemo(
+    () => (currentCard ? buildChoiceOptions(filteredCards, currentCard) : []),
+    [currentCard, filteredCards],
+  );
   const flashcardsComplete = completedSessionCount !== null;
   const progressCount = flashcardsComplete ? completedSessionCount : Math.min(currentIndex, filteredCards.length);
   const isEmptySelection = !loading && filteredCards.length === 0 && !flashcardsComplete;
@@ -438,7 +537,10 @@ export default function LearningPage() {
     resetFlashcardSession();
   };
 
-  const submitReview = async (rating: "know" | "hard" | "unknown") => {
+  const submitReview = async (
+    rating: "know" | "hard" | "unknown",
+    taskType: LearningMode = "flashcards",
+  ) => {
     if (!currentCard) return;
     const previousIndex = currentIndex;
     const previousLength = filteredCards.length;
@@ -446,7 +548,11 @@ export default function LearningPage() {
     try {
       setIsSubmitting(true);
       setMessage("");
-      await apiSend("/api/dashboard/review", "POST", { itemId: currentCard.id, rating });
+      await apiSend("/api/dashboard/review", "POST", {
+        itemId: currentCard.id,
+        rating,
+        taskType,
+      });
       setSessionSummary((current) => ({ ...current, [rating]: current[rating] + 1 }));
       setShowTranslation(false);
       setPendingAdvance({
@@ -468,7 +574,13 @@ export default function LearningPage() {
       <div>
         <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Что повторим сегодня?</h1>
         <p className="mt-2 text-foreground-secondary flex flex-wrap items-center gap-x-3 gap-y-1 text-sm sm:text-base">
-          <span>К повторению: <span className="text-foreground font-semibold">{filteredCards.length} карточек</span></span>
+          <span>Сегодня: <span className="text-foreground font-semibold">{data.summary.dueCount} повторений</span></span>
+          <span className="text-foreground-muted">|</span>
+          <span>Трудных: <span className="text-warning font-semibold">{data.summary.hardDueCount}</span></span>
+          <span className="text-foreground-muted">|</span>
+          <span>Новых: <span className="text-accent font-semibold">{data.summary.newCount}</span></span>
+          <span className="text-foreground-muted">|</span>
+          <span>В сессии: <span className="text-foreground font-semibold">{filteredCards.length}</span></span>
           <span className="text-foreground-muted">|</span>
           <span>Выполнено: <span className="text-success font-semibold">{progressCount}</span></span>
           <span className="text-foreground-muted">|</span>
@@ -478,16 +590,26 @@ export default function LearningPage() {
 
       {error ? <Card className="border-danger/30 bg-danger/10 text-danger">Не удалось загрузить обучение: {error}</Card> : null}
 
-      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_320px] gap-4">
-        <button type="button" onClick={() => setSelectedMode("flashcards")} className={`rounded-2xl border p-5 text-left transition-colors ${selectedMode === "flashcards" ? "border-accent bg-accent-light/40" : "border-border bg-background-card hover:border-border-hover hover:bg-background-hover"}`}>
+      <div className="grid grid-cols-1 lg:grid-cols-[repeat(4,minmax(0,1fr))_320px] gap-4">
+        <button type="button" onClick={() => { setSelectedMode("flashcards"); resetFlashcardSession(); }} className={`rounded-2xl border p-5 text-left transition-colors ${selectedMode === "flashcards" ? "border-accent bg-accent-light/40" : "border-border bg-background-card hover:border-border-hover hover:bg-background-hover"}`}>
           <div className="flex items-start justify-between gap-4"><div><p className="text-sm font-medium text-foreground-secondary">Режим</p><h2 className="mt-1 text-xl font-semibold text-foreground">Карточки</h2></div><Brain className={`w-6 h-6 ${selectedMode === "flashcards" ? "text-accent" : "text-foreground-secondary"}`} /></div>
           <p className="mt-3 text-sm text-foreground-secondary">Классический SRS-повтор: открываешь перевод, оцениваешь себя и двигаешь карточку по прогрессу.</p>
           <div className="mt-4 flex items-center gap-2"><Badge variant={selectedMode === "flashcards" ? "accent" : "default"}>{filteredCards.length} карточек в сессии</Badge><Badge variant="default">Оценка: знаю / трудно / не знаю</Badge></div>
         </button>
-        <button type="button" onClick={() => setSelectedMode("pairs")} className={`rounded-2xl border p-5 text-left transition-colors ${selectedMode === "pairs" ? "border-accent bg-accent-light/40" : "border-border bg-background-card hover:border-border-hover hover:bg-background-hover"}`}>
+        <button type="button" onClick={() => { setSelectedMode("pairs"); resetFlashcardSession(); }} className={`rounded-2xl border p-5 text-left transition-colors ${selectedMode === "pairs" ? "border-accent bg-accent-light/40" : "border-border bg-background-card hover:border-border-hover hover:bg-background-hover"}`}>
           <div className="flex items-start justify-between gap-4"><div><p className="text-sm font-medium text-foreground-secondary">Режим</p><h2 className="mt-1 text-xl font-semibold text-foreground">Пары</h2></div><Layers className={`w-6 h-6 ${selectedMode === "pairs" ? "text-accent" : "text-foreground-secondary"}`} /></div>
           <p className="mt-3 text-sm text-foreground-secondary">Две колонки по 5 слов, таймер на 60 секунд и мгновенная подстановка новой пары после правильного совпадения.</p>
           <div className="mt-4 flex items-center gap-2"><Badge variant={selectedMode === "pairs" ? "accent" : "default"}>5 слева / 5 справа</Badge><Badge variant="default">Спринт на скорость</Badge></div>
+        </button>
+        <button type="button" onClick={() => { setSelectedMode("ru_en_choice"); resetFlashcardSession(); }} className={`rounded-2xl border p-5 text-left transition-colors ${selectedMode === "ru_en_choice" ? "border-accent bg-accent-light/40" : "border-border bg-background-card hover:border-border-hover hover:bg-background-hover"}`}>
+          <div className="flex items-start justify-between gap-4"><div><p className="text-sm font-medium text-foreground-secondary">Сильный режим</p><h2 className="mt-1 text-xl font-semibold text-foreground">RU → EN</h2></div><Check className={`w-6 h-6 ${selectedMode === "ru_en_choice" ? "text-accent" : "text-foreground-secondary"}`} /></div>
+          <p className="mt-3 text-sm text-foreground-secondary">Видишь перевод на русском и выбираешь правильный английский вариант. Этот режим участвует в финальном закреплении слова.</p>
+          <div className="mt-4 flex items-center gap-2"><Badge variant={selectedMode === "ru_en_choice" ? "accent" : "default"}>4 варианта</Badge><Badge variant="default">Сильная проверка</Badge></div>
+        </button>
+        <button type="button" onClick={() => { setSelectedMode("cloze_choice"); resetFlashcardSession(); }} className={`rounded-2xl border p-5 text-left transition-colors ${selectedMode === "cloze_choice" ? "border-accent bg-accent-light/40" : "border-border bg-background-card hover:border-border-hover hover:bg-background-hover"}`}>
+          <div className="flex items-start justify-between gap-4"><div><p className="text-sm font-medium text-foreground-secondary">Сильный режим</p><h2 className="mt-1 text-xl font-semibold text-foreground">Пропуск в фразе</h2></div><MessageSquare className={`w-6 h-6 ${selectedMode === "cloze_choice" ? "text-accent" : "text-foreground-secondary"}`} /></div>
+          <p className="mt-3 text-sm text-foreground-secondary">Если у карточки есть исходная фраза, слово скрывается в контексте. Если контекст не подходит, режим мягко переключается на RU → EN.</p>
+          <div className="mt-4 flex items-center gap-2"><Badge variant={selectedMode === "cloze_choice" ? "accent" : "default"}>Контекст из новеллы</Badge><Badge variant="default">Fallback на RU → EN</Badge></div>
         </button>
         <Card className="space-y-3">
           <div className="flex items-center gap-2"><Library className="w-5 h-5 text-accent" /><h2 className="text-lg font-semibold text-foreground">Фильтры</h2></div>
@@ -594,14 +716,50 @@ export default function LearningPage() {
               <Badge variant={studyStatusMeta[currentCard.status].variant} className="absolute top-4 left-4">{studyStatusMeta[currentCard.status].label}</Badge>
               <Badge variant="default" className="absolute top-4 right-4">{safeIndex + 1} / {filteredCards.length}</Badge>
               <p className="text-xs uppercase tracking-wide text-foreground-muted mb-4">{kindLabel(currentCard.kind)} · {currentCard.novel}</p>
-              <p className="text-3xl sm:text-4xl font-bold text-foreground mb-2">{currentCard.en}</p>
-              {showTranslation ? (
-                <div className="mt-4 space-y-3 animate-in fade-in duration-300">
-                  <p className="text-xl text-accent font-semibold">{currentCard.ru}</p>
-                  {currentCard.context ? <p className="text-sm text-foreground-muted max-w-md italic">&ldquo;{currentCard.context}&rdquo;</p> : null}
-                </div>
+              {effectiveMode === "flashcards" ? (
+                <>
+                  <p className="text-3xl sm:text-4xl font-bold text-foreground mb-2">{currentCard.en}</p>
+                  {showTranslation ? (
+                    <div className="mt-4 space-y-3 animate-in fade-in duration-300">
+                      <p className="text-xl text-accent font-semibold">{currentCard.ru}</p>
+                      {currentCard.context ? <p className="text-sm text-foreground-muted max-w-md italic">&ldquo;{currentCard.context}&rdquo;</p> : null}
+                    </div>
+                  ) : (
+                    <Button variant="ghost" size="sm" className="mt-6" onClick={() => setShowTranslation(true)}><Eye className="w-4 h-4 mr-2" />Показать перевод</Button>
+                  )}
+                </>
               ) : (
-                <Button variant="ghost" size="sm" className="mt-6" onClick={() => setShowTranslation(true)}><Eye className="w-4 h-4 mr-2" />Показать перевод</Button>
+                <div className="w-full max-w-2xl space-y-5">
+                  <div className="space-y-3">
+                    <p className="text-sm font-medium text-foreground-secondary">
+                      {effectiveMode === "cloze_choice" ? "Вставь пропущенное слово" : "Выбери английский вариант"}
+                    </p>
+                    <p className="text-2xl sm:text-3xl font-bold text-foreground">
+                      {effectiveMode === "cloze_choice" ? clozePrompt : currentCard.ru}
+                    </p>
+                    {selectedMode === "cloze_choice" && effectiveMode === "ru_en_choice" ? (
+                      <p className="text-sm text-foreground-muted">
+                        Для этой карточки точный cloze не собрался, поэтому используется fallback на RU → EN.
+                      </p>
+                    ) : null}
+                    {effectiveMode === "cloze_choice" && currentCard.contextTranslation ? (
+                      <p className="text-sm text-foreground-muted">{currentCard.contextTranslation}</p>
+                    ) : null}
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {choiceOptions.map((option) => (
+                      <button
+                        key={option.id}
+                        type="button"
+                        onClick={() => void submitReview(option.isCorrect ? "know" : "unknown", effectiveMode)}
+                        disabled={isSubmitting}
+                        className="rounded-xl border border-border bg-background-hover px-4 py-3 text-left text-sm font-medium text-foreground transition-colors hover:border-accent hover:bg-accent-light/30 disabled:opacity-60"
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               )}
             </Card>
           ) : null}
@@ -609,13 +767,19 @@ export default function LearningPage() {
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="flex flex-wrap items-center gap-4 text-sm text-foreground-secondary">
               <span className="flex items-center gap-1.5"><Clock className="w-4 h-4" />Лимит дня: {data.settings.dailyWords}</span>
+              <span>Новых в день: {data.settings.dailyNewWords}</span>
               <span>{data.settings.prioritizeDifficult ? "Сложные слова в приоритете" : "Обычный порядок"}</span>
             </div>
-            {showTranslation ? (
+            {effectiveMode === "flashcards" && showTranslation ? (
               <div className="flex flex-wrap gap-2 justify-center">
-                <button type="button" onClick={() => void submitReview("know")} disabled={isSubmitting} className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium bg-success/15 text-success hover:bg-success/25 transition-colors disabled:opacity-60"><Check className="w-4 h-4" />Знаю</button>
-                <button type="button" onClick={() => void submitReview("hard")} disabled={isSubmitting} className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium bg-warning/15 text-warning hover:bg-warning/25 transition-colors disabled:opacity-60"><Star className="w-4 h-4" />Трудно</button>
-                <button type="button" onClick={() => void submitReview("unknown")} disabled={isSubmitting} className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium bg-danger/15 text-danger hover:bg-danger/25 transition-colors disabled:opacity-60"><X className="w-4 h-4" />Не знаю</button>
+                <button type="button" onClick={() => void submitReview("know", "flashcards")} disabled={isSubmitting} className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium bg-success/15 text-success hover:bg-success/25 transition-colors disabled:opacity-60"><Check className="w-4 h-4" />Знаю</button>
+                <button type="button" onClick={() => void submitReview("hard", "flashcards")} disabled={isSubmitting} className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium bg-warning/15 text-warning hover:bg-warning/25 transition-colors disabled:opacity-60"><Star className="w-4 h-4" />Трудно</button>
+                <button type="button" onClick={() => void submitReview("unknown", "flashcards")} disabled={isSubmitting} className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium bg-danger/15 text-danger hover:bg-danger/25 transition-colors disabled:opacity-60"><X className="w-4 h-4" />Не знаю</button>
+              </div>
+            ) : effectiveMode !== "flashcards" ? (
+              <div className="flex flex-wrap gap-2 justify-center">
+                <button type="button" onClick={() => void submitReview("hard", effectiveMode)} disabled={isSubmitting} className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium bg-warning/15 text-warning hover:bg-warning/25 transition-colors disabled:opacity-60"><Star className="w-4 h-4" />Не уверен</button>
+                <Button variant="secondary" onClick={resetFlashcardSession}><RotateCcw className="w-4 h-4 mr-2" />Сбросить сессию</Button>
               </div>
             ) : (
               <Button variant="secondary" onClick={resetFlashcardSession}><RotateCcw className="w-4 h-4 mr-2" />Сбросить сессию</Button>

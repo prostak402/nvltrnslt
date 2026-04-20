@@ -73,6 +73,12 @@ export const PLANS = {
 export const STUDY_STATUSES = ["new", "hard", "learned"] as const;
 export const STUDY_KINDS = ["word", "phrase", "sentence"] as const;
 export const REVIEW_RATINGS = ["unknown", "hard", "know"] as const;
+export const REVIEW_TASK_TYPES = [
+  "flashcards",
+  "pairs",
+  "ru_en_choice",
+  "cloze_choice",
+] as const;
 export const SUPPORT_CATEGORIES = [
   "mod",
   "sync",

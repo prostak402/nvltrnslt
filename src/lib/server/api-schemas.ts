@@ -5,6 +5,7 @@ import { z } from "zod";
 import {
   COMPATIBILITY_STATUSES,
   REVIEW_RATINGS,
+  REVIEW_TASK_TYPES,
   STUDY_KINDS,
   STUDY_STATUSES,
   SUPPORT_CATEGORIES,
@@ -53,10 +54,12 @@ export const resetPasswordBodySchema = z
 export const reviewBodySchema = z.object({
   itemId: positiveInt,
   rating: z.enum(REVIEW_RATINGS),
+  taskType: z.enum(REVIEW_TASK_TYPES),
 });
 
 export const dashboardSettingsBodySchema = z.object({
   dailyWords: z.coerce.number().int().min(5).max(50),
+  dailyNewWords: z.coerce.number().int().min(1).max(20),
   prioritizeDifficult: z.boolean(),
   includePhrases: z.boolean(),
   autoSync: z.boolean(),
@@ -172,12 +175,14 @@ export const studyItemPatchBodySchema = z
     translation: z.string().max(10000).optional(),
     note: z.string().max(10000).optional(),
     status: z.enum(STUDY_STATUSES).optional(),
+    isActive: z.boolean().optional(),
   })
   .refine(
     (value) =>
       value.translation !== undefined ||
       value.note !== undefined ||
-      value.status !== undefined,
+      value.status !== undefined ||
+      value.isActive !== undefined,
     {
       message: "Измените хотя бы одно поле",
     },
