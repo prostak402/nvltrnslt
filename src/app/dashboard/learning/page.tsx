@@ -45,11 +45,6 @@ type KindFilter = "all" | "word" | "phrase" | "sentence";
 type LearningShortcut = "newWords" | "hardWords" | "phrases" | "random";
 type ReviewSummary = Record<"know" | "hard" | "unknown", number>;
 type PairFeedback = { kind: "success" | "error"; leftId: number; rightId: number } | null;
-type PendingFlashcardAdvance = {
-  reviewedCardId: number;
-  previousIndex: number;
-  previousLength: number;
-} | null;
 
 const ALL_NOVELS_LABEL = "Все новеллы";
 const PAIRS_ACTIVE_SLOTS = 5;
@@ -402,10 +397,12 @@ export default function LearningPage() {
   const [selectedShortcut, setSelectedShortcut] = useState<LearningShortcut>("random");
   const [selectedNovel, setSelectedNovel] = useState(ALL_NOVELS_LABEL);
   const [sessionSummary, setSessionSummary] = useState<ReviewSummary>(createSummary);
+  const [sessionCardIds, setSessionCardIds] = useState<number[]>([]);
+  const [sessionBaseCount, setSessionBaseCount] = useState(0);
+  const [pendingSessionReset, setPendingSessionReset] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [message, setMessage] = useState("");
   const [completedSessionCount, setCompletedSessionCount] = useState<number | null>(null);
-  const [pendingAdvance, setPendingAdvance] = useState<PendingFlashcardAdvance>(null);
 
   const availableNovels = data.novels.length > 0 ? data.novels : [ALL_NOVELS_LABEL];
   const activeNovel = availableNovels.includes(selectedNovel) ? selectedNovel : availableNovels[0];
@@ -428,6 +425,19 @@ export default function LearningPage() {
     () => shortcutScopedCards.filter((card) => activeKind === "all" || card.kind === activeKind),
     [activeKind, shortcutScopedCards],
   );
+  const filteredCardMap = useMemo(
+    () => new Map(filteredCards.map((card) => [card.id, card])),
+    [filteredCards],
+  );
+  const sessionCards = useMemo(() => {
+    if (selectedMode === "pairs") {
+      return filteredCards;
+    }
+
+    return sessionCardIds
+      .map((cardId) => filteredCardMap.get(cardId))
+      .filter((card): card is LearningCard => Boolean(card));
+  }, [filteredCardMap, filteredCards, selectedMode, sessionCardIds]);
   const shortcutButtons = useMemo<Array<{
     id: LearningShortcut;
     label: string;
@@ -473,48 +483,67 @@ export default function LearningPage() {
     [novelScopedCards],
   );
   const filteredIdsKey = filteredCards.map((card) => card.id).join("-") || "empty";
-  const safeIndex = Math.min(currentIndex, Math.max(filteredCards.length - 1, 0));
-  const currentCard = filteredCards[safeIndex];
+  const safeIndex = Math.min(currentIndex, Math.max(sessionCards.length - 1, 0));
+  const currentCard = sessionCards[safeIndex];
   const effectiveMode =
     selectedMode === "cloze_choice" && currentCard && !currentCard.hasCloze
       ? "ru_en_choice"
       : selectedMode;
   const clozePrompt = currentCard ? buildClozeText(currentCard) : null;
   const choiceOptions = useMemo(
-    () => (currentCard ? buildChoiceOptions(filteredCards, currentCard) : []),
-    [currentCard, filteredCards],
+    () => (currentCard ? buildChoiceOptions(sessionCards, currentCard) : []),
+    [currentCard, sessionCards],
   );
   const flashcardsComplete = completedSessionCount !== null;
-  const progressCount = flashcardsComplete ? completedSessionCount : Math.min(currentIndex, filteredCards.length);
-  const isEmptySelection = !loading && filteredCards.length === 0 && !flashcardsComplete;
+  const reviewedCount = sessionSummary.know + sessionSummary.hard + sessionSummary.unknown;
+  const activeSessionCount =
+    selectedMode === "pairs"
+      ? filteredCards.length
+      : flashcardsComplete
+        ? completedSessionCount ?? sessionBaseCount
+        : sessionBaseCount;
+  const progressCount =
+    selectedMode === "pairs"
+      ? 0
+      : flashcardsComplete
+        ? completedSessionCount ?? reviewedCount
+        : reviewedCount;
+  const remainingCount =
+    selectedMode === "pairs"
+      ? filteredCards.length
+      : flashcardsComplete
+        ? 0
+        : Math.max(activeSessionCount - reviewedCount, 0);
+  const isEmptySelection =
+    !loading &&
+    !pendingSessionReset &&
+    (selectedMode === "pairs" ? filteredCards.length === 0 : sessionCards.length === 0) &&
+    !flashcardsComplete;
 
   const resetFlashcardSession = () => {
     setShowTranslation(false);
     setCurrentIndex(0);
     setSessionSummary(createSummary());
+    setSessionCardIds([]);
+    setSessionBaseCount(0);
+    setPendingSessionReset(true);
     setMessage("");
     setCompletedSessionCount(null);
-    setPendingAdvance(null);
   };
 
   useEffect(() => {
-    if (!pendingAdvance || loading) return;
+    if (selectedMode === "pairs" || !pendingSessionReset || loading) return;
 
-    const sessionCompleted = pendingAdvance.previousIndex + 1 >= pendingAdvance.previousLength;
-    if (sessionCompleted) {
-      setCompletedSessionCount(pendingAdvance.previousLength);
-      setPendingAdvance(null);
-      return;
-    }
+    const nextIds = filteredCards.map((card) => card.id);
+    setSessionCardIds(nextIds);
+    setSessionBaseCount(nextIds.length);
+    setPendingSessionReset(false);
+  }, [filteredCards, loading, pendingSessionReset, selectedMode]);
 
-    const reviewedCardStillVisible = filteredCards.some((card) => card.id === pendingAdvance.reviewedCardId);
-    const nextIndex = reviewedCardStillVisible
-      ? pendingAdvance.previousIndex + 1
-      : pendingAdvance.previousIndex;
-
-    setCurrentIndex(Math.min(nextIndex, Math.max(filteredCards.length - 1, 0)));
-    setPendingAdvance(null);
-  }, [filteredCards, loading, pendingAdvance]);
+  useEffect(() => {
+    if (selectedMode === "pairs") return;
+    setCurrentIndex((current) => Math.min(current, Math.max(sessionCards.length - 1, 0)));
+  }, [selectedMode, sessionCards.length]);
 
   const handleKindChange = (nextKind: KindFilter) => {
     setSelectedKind(nextKind);
@@ -543,7 +572,7 @@ export default function LearningPage() {
   ) => {
     if (!currentCard) return;
     const previousIndex = currentIndex;
-    const previousLength = filteredCards.length;
+    const previousLength = sessionCards.length;
 
     try {
       setIsSubmitting(true);
@@ -555,14 +584,16 @@ export default function LearningPage() {
       });
       setSessionSummary((current) => ({ ...current, [rating]: current[rating] + 1 }));
       setShowTranslation(false);
-      setPendingAdvance({
-        reviewedCardId: currentCard.id,
-        previousIndex,
-        previousLength,
-      });
+      setSessionCardIds((current) => current.filter((cardId) => cardId !== currentCard.id));
+      if (previousLength <= 1) {
+        setCompletedSessionCount(sessionBaseCount || previousLength);
+        setCurrentIndex(0);
+      } else {
+        const nextLength = previousLength - 1;
+        setCurrentIndex(Math.min(previousIndex, Math.max(nextLength - 1, 0)));
+      }
       await reload();
     } catch (requestError) {
-      setPendingAdvance(null);
       setMessage(requestError instanceof Error ? requestError.message : "Не удалось сохранить результат повторения.");
     } finally {
       setIsSubmitting(false);
@@ -580,11 +611,11 @@ export default function LearningPage() {
           <span className="text-foreground-muted">|</span>
           <span>Новых: <span className="text-accent font-semibold">{data.summary.newCount}</span></span>
           <span className="text-foreground-muted">|</span>
-          <span>В сессии: <span className="text-foreground font-semibold">{filteredCards.length}</span></span>
+          <span>В сессии: <span className="text-foreground font-semibold">{activeSessionCount}</span></span>
           <span className="text-foreground-muted">|</span>
           <span>Выполнено: <span className="text-success font-semibold">{progressCount}</span></span>
           <span className="text-foreground-muted">|</span>
-          <span>Осталось: <span className="text-warning font-semibold">{Math.max(filteredCards.length - Math.min(currentIndex, filteredCards.length), 0)}</span></span>
+          <span>Осталось: <span className="text-warning font-semibold">{remainingCount}</span></span>
         </p>
       </div>
 
@@ -594,7 +625,7 @@ export default function LearningPage() {
         <button type="button" onClick={() => { setSelectedMode("flashcards"); resetFlashcardSession(); }} className={`rounded-2xl border p-5 text-left transition-colors ${selectedMode === "flashcards" ? "border-accent bg-accent-light/40" : "border-border bg-background-card hover:border-border-hover hover:bg-background-hover"}`}>
           <div className="flex items-start justify-between gap-4"><div><p className="text-sm font-medium text-foreground-secondary">Режим</p><h2 className="mt-1 text-xl font-semibold text-foreground">Карточки</h2></div><Brain className={`w-6 h-6 ${selectedMode === "flashcards" ? "text-accent" : "text-foreground-secondary"}`} /></div>
           <p className="mt-3 text-sm text-foreground-secondary">Классический SRS-повтор: открываешь перевод, оцениваешь себя и двигаешь карточку по прогрессу.</p>
-          <div className="mt-4 flex items-center gap-2"><Badge variant={selectedMode === "flashcards" ? "accent" : "default"}>{filteredCards.length} карточек в сессии</Badge><Badge variant="default">Оценка: знаю / трудно / не знаю</Badge></div>
+          <div className="mt-4 flex items-center gap-2"><Badge variant={selectedMode === "flashcards" ? "accent" : "default"}>{selectedMode === "pairs" ? filteredCards.length : activeSessionCount} карточек в сессии</Badge><Badge variant="default">Оценка: знаю / трудно / не знаю</Badge></div>
         </button>
         <button type="button" onClick={() => { setSelectedMode("pairs"); resetFlashcardSession(); }} className={`rounded-2xl border p-5 text-left transition-colors ${selectedMode === "pairs" ? "border-accent bg-accent-light/40" : "border-border bg-background-card hover:border-border-hover hover:bg-background-hover"}`}>
           <div className="flex items-start justify-between gap-4"><div><p className="text-sm font-medium text-foreground-secondary">Режим</p><h2 className="mt-1 text-xl font-semibold text-foreground">Пары</h2></div><Layers className={`w-6 h-6 ${selectedMode === "pairs" ? "text-accent" : "text-foreground-secondary"}`} /></div>
@@ -708,13 +739,13 @@ export default function LearningPage() {
       ) : (
         <div className="space-y-6">
           <div className="space-y-2">
-            <div className="flex justify-between text-sm text-foreground-secondary"><span>Прогресс</span><span>{progressCount} / {filteredCards.length}</span></div>
-            <div className="h-2 bg-background-hover rounded-full overflow-hidden"><div className="h-full bg-accent rounded-full transition-all duration-300" style={{ width: `${(progressCount / Math.max(filteredCards.length, 1)) * 100}%` }} /></div>
+            <div className="flex justify-between text-sm text-foreground-secondary"><span>Прогресс</span><span>{progressCount} / {Math.max(activeSessionCount, 1)}</span></div>
+            <div className="h-2 bg-background-hover rounded-full overflow-hidden"><div className="h-full bg-accent rounded-full transition-all duration-300" style={{ width: `${(progressCount / Math.max(activeSessionCount, 1)) * 100}%` }} /></div>
           </div>
           {currentCard ? (
             <Card className="min-h-[320px] flex flex-col items-center justify-center text-center relative">
               <Badge variant={studyStatusMeta[currentCard.status].variant} className="absolute top-4 left-4">{studyStatusMeta[currentCard.status].label}</Badge>
-              <Badge variant="default" className="absolute top-4 right-4">{safeIndex + 1} / {filteredCards.length}</Badge>
+              <Badge variant="default" className="absolute top-4 right-4">{safeIndex + 1} / {Math.max(activeSessionCount, 1)}</Badge>
               <p className="text-xs uppercase tracking-wide text-foreground-muted mb-4">{kindLabel(currentCard.kind)} · {currentCard.novel}</p>
               {effectiveMode === "flashcards" ? (
                 <>
