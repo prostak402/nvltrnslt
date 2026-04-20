@@ -406,10 +406,12 @@ export async function getLearningPageData(userId: number) {
   const allItems = itemRows
     .map(mapStudyItemRow)
     .sort((a, b) => a.nextReviewAt.localeCompare(b.nextReviewAt));
-  const dueItems = allItems.filter((entry) => entry.nextReviewAt <= currentTime);
+  const availableForLearning = allItems.filter(
+    (entry) => entry.status === "new" || entry.nextReviewAt <= currentTime,
+  );
   const fallbackLimit = Math.max(resolvedSettings.dailyWords, 10);
-  const items = dueItems.length
-    ? dueItems
+  const items = availableForLearning.length
+    ? availableForLearning
     : [...allItems]
         .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
         .slice(0, fallbackLimit);
