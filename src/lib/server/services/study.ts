@@ -39,6 +39,7 @@ import {
   formatDateRu,
   formatDateTimeRu,
   formatRelativeDateRu,
+  hasReachedReviewDay,
   nowIso,
   startOfDayKey,
 } from "@/lib/server/utils";
@@ -157,7 +158,7 @@ function buildStudyItemMeta(
     isDue:
       item.isActive &&
       item.status !== "learned" &&
-      item.nextReviewAt <= nowIso(),
+      hasReachedReviewDay(item.nextReviewAt),
   };
 }
 
@@ -230,7 +231,7 @@ export async function getDashboardOverview(
     (entry) =>
       entry.isActive &&
       entry.status !== "learned" &&
-      entry.nextReviewAt <= nowIso(),
+      hasReachedReviewDay(entry.nextReviewAt),
   ).length;
 
   const recentWords = words
@@ -494,7 +495,7 @@ export async function getLearningPageData(userId: number) {
         novel: latestOccurrence?.novelTitle ?? "Не указано",
         status: item.status,
         isActive: item.isActive,
-        isDue: item.isActive && item.status !== "learned" && item.nextReviewAt <= nowIso(),
+        isDue: item.isActive && item.status !== "learned" && hasReachedReviewDay(item.nextReviewAt),
         learningStage: item.learningStage,
         hasCloze: canBuildCloze(item.text, context, contextWordPosition),
         clozeText: cloze.clozeText,
@@ -619,7 +620,7 @@ export async function getProgressPageData(
     (entry) =>
       entry.isActive &&
       entry.status !== "learned" &&
-      entry.nextReviewAt <= nowIso(),
+      hasReachedReviewDay(entry.nextReviewAt),
   ).length;
   const recentReviewScores = reviews
     .slice(0, 10)

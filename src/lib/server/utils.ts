@@ -42,6 +42,22 @@ export function startOfDayKey(input = new Date()) {
   return date.toISOString().slice(0, 10);
 }
 
+export function hasReachedReviewDay(
+  reviewAt: string | Date | null | undefined,
+  nowInput = new Date(),
+) {
+  if (!reviewAt) {
+    return false;
+  }
+
+  const reviewDate = typeof reviewAt === "string" ? new Date(reviewAt) : reviewAt;
+  if (Number.isNaN(reviewDate.getTime())) {
+    return false;
+  }
+
+  return startOfDayKey(reviewDate) <= startOfDayKey(nowInput);
+}
+
 export function addHours(dateIso: string, hours: number) {
   const date = new Date(dateIso);
   date.setTime(date.getTime() + hours * 60 * 60 * 1000);

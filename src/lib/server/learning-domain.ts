@@ -6,7 +6,7 @@ import type {
   UserSettingsRecord,
 } from "@/lib/types";
 import { buildClozeData } from "@/lib/learning/cloze";
-import { addDays } from "@/lib/server/utils";
+import { addDays, hasReachedReviewDay } from "@/lib/server/utils";
 
 const INITIAL_STAGE = 0;
 const FINAL_REVIEW_STAGE = 3;
@@ -57,7 +57,7 @@ function isDue(item: LearningQueueCandidate, now: Date) {
     return false;
   }
 
-  return new Date(item.nextReviewAt).getTime() <= now.getTime();
+  return hasReachedReviewDay(item.nextReviewAt, now);
 }
 
 function nextStageDueAt(stage: number, nowIso: string) {
