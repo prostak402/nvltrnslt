@@ -120,6 +120,7 @@ export interface StudyItemOccurrenceRecord {
   novelTitle: string;
   contextOriginal: string;
   contextTranslation: string;
+  contextWordPosition: number | null;
   source: "mod" | "import" | "site";
   createdAt: string;
 }

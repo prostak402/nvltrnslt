@@ -5,6 +5,7 @@ import type {
   StudyStatus,
   UserSettingsRecord,
 } from "@/lib/types";
+import { buildClozeData } from "@/lib/learning/cloze";
 import { addDays } from "@/lib/server/utils";
 
 const INITIAL_STAGE = 0;
@@ -97,15 +98,16 @@ function sortInactiveCandidates(left: LearningQueueCandidate, right: LearningQue
   return right.createdAt.localeCompare(left.createdAt);
 }
 
-export function canBuildCloze(text: string, context: string) {
-  const trimmedText = text.trim();
-  const trimmedContext = context.trim();
-
-  if (!trimmedText || !trimmedContext) {
-    return false;
-  }
-
-  return trimmedContext.toLowerCase().includes(trimmedText.toLowerCase());
+export function canBuildCloze(
+  text: string,
+  context: string,
+  contextWordPosition?: number | null,
+) {
+  return buildClozeData({
+    context,
+    answer: text,
+    contextWordPosition,
+  }).hasCloze;
 }
 
 export function buildLearningQueue(

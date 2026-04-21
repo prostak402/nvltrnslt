@@ -719,6 +719,7 @@ export async function saveDeviceStudyItem(params: {
   note?: string;
   contextOriginal?: string;
   contextTranslation?: string;
+  contextWordPosition?: number | null;
   novelTitle?: string;
 }) {
   const {
@@ -729,6 +730,7 @@ export async function saveDeviceStudyItem(params: {
     note = "",
     contextOriginal = "",
     contextTranslation = "",
+    contextWordPosition = null,
     novelTitle = "Неизвестная новелла",
   } = params;
 
@@ -817,6 +819,7 @@ export async function saveDeviceStudyItem(params: {
       novelTitle,
       contextOriginal,
       contextTranslation,
+      contextWordPosition,
       source: "mod",
       createdAt: toDate(now) ?? new Date(),
     });

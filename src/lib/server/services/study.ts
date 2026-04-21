@@ -8,6 +8,7 @@ import {
   buildLearningQueue,
   canBuildCloze,
 } from "@/lib/server/learning-domain";
+import { buildClozeData } from "@/lib/learning/cloze";
 import type {
   DashboardHistoryResponse,
   DashboardOverviewResponse,
@@ -98,6 +99,7 @@ function mapOccurrenceRow(row: typeof studyItemOccurrences.$inferSelect): StudyI
     novelTitle: row.novelTitle,
     contextOriginal: row.contextOriginal,
     contextTranslation: row.contextTranslation,
+    contextWordPosition: row.contextWordPosition,
     source: row.source as StudyItemOccurrenceRecord["source"],
     createdAt: toIsoString(row.createdAt) ?? "",
   };
@@ -475,19 +477,28 @@ export async function getLearningPageData(userId: number) {
     const cards = queueItems.map((item) => {
       const latestOccurrence = latestByItemId.get(item.id);
       const context = latestOccurrence?.contextOriginal ?? "";
+      const contextWordPosition = latestOccurrence?.contextWordPosition ?? null;
+      const cloze = buildClozeData({
+        context,
+        answer: item.text,
+        contextWordPosition,
+      });
       return {
         id: item.id,
         en: item.text,
         ru: item.translation,
         context,
         contextTranslation: latestOccurrence?.contextTranslation ?? "",
+        contextWordPosition,
         kind: item.kind,
         novel: latestOccurrence?.novelTitle ?? "Не указано",
         status: item.status,
         isActive: item.isActive,
         isDue: item.isActive && item.status !== "learned" && item.nextReviewAt <= nowIso(),
         learningStage: item.learningStage,
-        hasCloze: canBuildCloze(item.text, context),
+        hasCloze: canBuildCloze(item.text, context, contextWordPosition),
+        clozeText: cloze.clozeText,
+        clozeAnswer: cloze.clozeAnswer,
       };
     });
 

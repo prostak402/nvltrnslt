@@ -1,0 +1,1 @@
+ALTER TABLE "study_item_occurrences" ADD COLUMN "context_word_position" integer;

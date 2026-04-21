@@ -15,6 +15,7 @@ type LearningCard = {
   ru: string;
   context: string;
   contextTranslation: string;
+  contextWordPosition: number | null;
   kind: "word" | "phrase" | "sentence";
   novel: string;
   status: "new" | "hard" | "learned";
@@ -22,6 +23,8 @@ type LearningCard = {
   isDue: boolean;
   learningStage: number;
   hasCloze: boolean;
+  clozeText: string | null;
+  clozeAnswer: string | null;
 };
 type LearningResponse = {
   cards: LearningCard[];
@@ -60,41 +63,39 @@ const initialData: LearningResponse = {
 const createSummary = (): ReviewSummary => ({ know: 0, hard: 0, unknown: 0 });
 const kindLabel = (kind: LearningCard["kind"]) => kind === "phrase" ? "Фраза" : kind === "sentence" ? "Предложение" : "Слово";
 
-function escapeRegExp(value: string) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-function buildClozeText(card: LearningCard) {
-  if (!card.hasCloze || !card.context.trim()) {
-    return null;
+function getChoiceLabel(card: LearningCard, mode: "ru_en_choice" | "cloze_choice") {
+  if (mode === "cloze_choice") {
+    return (card.clozeAnswer?.trim() || card.en).trim();
   }
 
-  const pattern = new RegExp(escapeRegExp(card.en), "i");
-  if (!pattern.test(card.context)) {
-    return null;
-  }
-
-  return card.context.replace(pattern, "______");
+  return card.en.trim();
 }
 
-function buildChoiceOptions(cards: LearningCard[], currentCard: LearningCard) {
+function buildChoiceOptions(
+  cards: LearningCard[],
+  currentCard: LearningCard,
+  mode: "ru_en_choice" | "cloze_choice",
+) {
+  const currentLabel = getChoiceLabel(currentCard, mode).toLowerCase();
   const preferredCandidates = cards.filter(
     (card) =>
       card.id !== currentCard.id &&
       card.kind === currentCard.kind &&
-      card.ru.trim().toLowerCase() !== currentCard.ru.trim().toLowerCase(),
+      card.ru.trim().toLowerCase() !== currentCard.ru.trim().toLowerCase() &&
+      getChoiceLabel(card, mode).toLowerCase() !== currentLabel,
   );
   const fallbackCandidates = cards.filter(
     (card) =>
       card.id !== currentCard.id &&
-      card.ru.trim().toLowerCase() !== currentCard.ru.trim().toLowerCase(),
+      card.ru.trim().toLowerCase() !== currentCard.ru.trim().toLowerCase() &&
+      getChoiceLabel(card, mode).toLowerCase() !== currentLabel,
   );
   const distractorPool = preferredCandidates.length >= 3 ? preferredCandidates : fallbackCandidates;
   const distractors = shuffle(distractorPool, currentCard.id * 97 + cards.length)
     .slice(0, Math.min(3, distractorPool.length))
     .map((card) => ({
       id: `wrong-${card.id}`,
-      label: card.en,
+      label: getChoiceLabel(card, mode),
       isCorrect: false,
     }));
 
@@ -102,7 +103,7 @@ function buildChoiceOptions(cards: LearningCard[], currentCard: LearningCard) {
     [
       {
         id: `correct-${currentCard.id}`,
-        label: currentCard.en,
+        label: getChoiceLabel(currentCard, mode),
         isCorrect: true,
       },
       ...distractors,
@@ -489,10 +490,13 @@ export default function LearningPage() {
     selectedMode === "cloze_choice" && currentCard && !currentCard.hasCloze
       ? "ru_en_choice"
       : selectedMode;
-  const clozePrompt = currentCard ? buildClozeText(currentCard) : null;
+  const clozePrompt = currentCard?.clozeText ?? null;
   const choiceOptions = useMemo(
-    () => (currentCard ? buildChoiceOptions(sessionCards, currentCard) : []),
-    [currentCard, sessionCards],
+    () =>
+      currentCard && effectiveMode !== "flashcards" && effectiveMode !== "pairs"
+        ? buildChoiceOptions(sessionCards, currentCard, effectiveMode)
+        : [],
+    [currentCard, effectiveMode, sessionCards],
   );
   const flashcardsComplete = completedSessionCount !== null;
   const reviewedCount = sessionSummary.know + sessionSummary.hard + sessionSummary.unknown;
@@ -768,6 +772,12 @@ export default function LearningPage() {
                     <p className="text-2xl sm:text-3xl font-bold text-foreground">
                       {effectiveMode === "cloze_choice" ? clozePrompt : currentCard.ru}
                     </p>
+                    {effectiveMode === "cloze_choice" ? (
+                      <div className="rounded-xl border border-accent/20 bg-accent-light/20 px-4 py-3">
+                        <p className="text-xs uppercase tracking-wide text-foreground-muted">Подсказка по переводу</p>
+                        <p className="mt-1 text-lg font-semibold text-accent">{currentCard.ru}</p>
+                      </div>
+                    ) : null}
                     {selectedMode === "cloze_choice" && effectiveMode === "ru_en_choice" ? (
                       <p className="text-sm text-foreground-muted">
                         Для этой карточки точный cloze не собрался, поэтому используется fallback на RU → EN.

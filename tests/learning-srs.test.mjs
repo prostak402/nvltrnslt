@@ -191,6 +191,34 @@ test("daily queue activates only the configured number of new words", async () =
   assert.equal(afterLearning.inactive, 3);
 });
 
+test("cloze uses stored context word position and keeps the real word form from the sentence", async () => {
+  const { client, deviceToken } = await registerAndActivateDevice({
+    name: "SRS Cloze Position",
+    email: "srs.cloze.position@example.com",
+    password: "cloze-position-password-123",
+  });
+
+  const itemId = await saveModItem(client, deviceToken, {
+    text: "go",
+    translation: "идти",
+    contextOriginal: "She went home before sunset.",
+    contextTranslation: "Она пошла домой до заката.",
+    contextWordPosition: 2,
+  });
+
+  const learningResponse = await client.request({
+    path: "/api/dashboard/learning",
+  });
+
+  assert.equal(learningResponse.status, 200);
+  const card = learningResponse.json?.data?.cards?.find((entry) => entry.id === itemId);
+  assert.ok(card);
+  assert.equal(card.hasCloze, true);
+  assert.equal(card.contextWordPosition, 2);
+  assert.equal(card.clozeAnswer, "went");
+  assert.equal(card.clozeText, "She ______ home before sunset.");
+});
+
 test("flashcards know advances stage 0 to 1 with next-day review", async () => {
   const { client, deviceToken } = await registerAndActivateDevice({
     name: "SRS Flashcards",

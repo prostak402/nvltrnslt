@@ -1028,6 +1028,8 @@ init -999 python:
         store.lex_edit_note = ""
     if not hasattr(store, "lex_open_context"):
         store.lex_open_context = ""
+    if not hasattr(store, "lex_context_word_position"):
+        store.lex_context_word_position = None
     if not hasattr(store, "lex_last_line"):
         store.lex_last_line = ""
 
@@ -1061,6 +1063,51 @@ init -999 python:
         w = w.strip()
         w = re.sub(r"^[^A-Za-z']+|[^A-Za-z']+$", "", w)
         return w.lower()
+
+    def lex_parse_link_value(value):
+        raw = lex_to_text(value).strip()
+        if not raw:
+            return "", None
+
+        word = raw
+        position = None
+        if "|" in raw:
+            word, _, suffix = raw.partition("|")
+            suffix = lex_to_text(suffix).strip()
+            if suffix:
+                try:
+                    parsed = int(suffix)
+                    if parsed > 0:
+                        position = parsed
+                except Exception:
+                    position = None
+
+        return lex_norm(word), position
+
+    def lex_find_context_word_position(word, context, fallback_position=None):
+        if fallback_position:
+            try:
+                parsed = int(fallback_position)
+                if parsed > 0:
+                    return parsed
+            except Exception:
+                pass
+
+        normalized_word = lex_norm(word)
+        context = lex_to_text(context).strip()
+        if (not normalized_word) or (not context):
+            return None
+
+        word_index = 0
+        for match in _WORD_RE.finditer(context):
+            token = lex_norm(match.group(0))
+            if not token:
+                continue
+            word_index += 1
+            if token == normalized_word:
+                return word_index
+
+        return None
 
     def _split_keep_tags(text):
         parts = []
@@ -1098,6 +1145,7 @@ init -999 python:
             return ""
 
         out = []
+        word_counter = [0]
         for part in _split_keep_tags(text):
             if (part.startswith("{") and part.endswith("}")) or (part.startswith("[") and part.endswith("]")):
                 out.append(part)
@@ -1108,7 +1156,8 @@ init -999 python:
                 key = lex_norm(raw)
                 if not key:
                     return raw
-                return "{a=lex:%s}%s{/a}" % (key, raw)
+                word_counter[0] += 1
+                return "{a=lex:%s|%d}%s{/a}" % (key, word_counter[0], raw)
 
             out.append(_WORD_RE.sub(repl, part))
 
@@ -1184,7 +1233,7 @@ init -999 python:
             return 1
         return 2
 
-    def lex_open_word(word):
+    def lex_open_word(word, context_word_position=None):
         w = lex_norm(word)
         if not w:
             return None
@@ -1192,6 +1241,11 @@ init -999 python:
         store.lex_is_pattern = False
         store.lex_selected = w
         store.lex_open_context = lex_context_now() or ""
+        store.lex_context_word_position = lex_find_context_word_position(
+            w,
+            store.lex_open_context,
+            context_word_position,
+        )
 
         _inc_click(persistent.lex_custom, w)
         e = _ensure_entry(persistent.lex_custom, w)
@@ -1212,6 +1266,7 @@ init -999 python:
         store.lex_is_pattern = True
         store.lex_selected = p
         store.lex_open_context = lex_context_now() or ""
+        store.lex_context_word_position = None
 
         _inc_click(persistent.lex_patterns, p)
         e = _ensure_entry(persistent.lex_patterns, p)
@@ -1303,6 +1358,7 @@ init -999 python:
             "note": note,
             "contextOriginal": context,
             "contextTranslation": "",
+            "contextWordPosition": None if store.lex_is_pattern else store.lex_context_word_position,
             "novelTitle": lex_novel_title(),
         }
 
@@ -1457,10 +1513,11 @@ init -999 python:
         return lex_open_pattern(p)
 
     def lex_click(value):
+        word, context_word_position = lex_parse_link_value(value)
         if store.lex_phrase_mode:
-            lex_phrase_add(value)
+            lex_phrase_add(word)
             return None
-        return lex_open_word(value)
+        return lex_open_word(word, context_word_position)
 
     def lex_list_words(q):
         ql = (q or "").strip().lower()

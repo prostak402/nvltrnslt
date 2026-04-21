@@ -111,6 +111,7 @@ export const studyItemOccurrences = pgTable("study_item_occurrences", {
   novelTitle: varchar("novel_title", { length: 180 }).notNull(),
   contextOriginal: text("context_original").notNull().default(""),
   contextTranslation: text("context_translation").notNull().default(""),
+  contextWordPosition: integer("context_word_position"),
   source: varchar("source", { length: 20 }).notNull().default("mod"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
 });

@@ -15,6 +15,9 @@ import {
 const nonEmptyString = (max: number) => z.string().trim().min(1).max(max);
 const optionalText = (max: number) => z.string().max(max).optional();
 const positiveInt = z.coerce.number().int().positive();
+const optionalPositiveInt = z
+  .union([z.coerce.number().int().positive(), z.null()])
+  .optional();
 const nullableNonNegativeInt = z
   .union([z.coerce.number().int().min(0), z.null()])
   .transform((value) => (value === 0 ? null : value));
@@ -152,6 +155,7 @@ export const modItemBodySchema = z.object({
   note: optionalText(10000),
   contextOriginal: optionalText(20000),
   contextTranslation: optionalText(20000),
+  contextWordPosition: optionalPositiveInt,
   novelTitle: z.string().trim().max(180).optional(),
 });
 
