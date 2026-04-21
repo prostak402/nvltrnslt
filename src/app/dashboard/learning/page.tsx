@@ -28,6 +28,7 @@ type LearningCard = {
 };
 type LearningResponse = {
   cards: LearningCard[];
+  practicePool: LearningCard[];
   categories: Array<{ label: string; count: number }>;
   novels: string[];
   summary: {
@@ -46,6 +47,8 @@ type LearningResponse = {
 type LearningMode = "flashcards" | "pairs" | "ru_en_choice" | "cloze_choice";
 type KindFilter = "all" | "word" | "phrase" | "sentence";
 type LearningShortcut = "newWords" | "hardWords" | "phrases" | "random";
+type LearningSessionSource = "daily" | "practice";
+type PracticePreset = "random" | "custom";
 type ReviewSummary = Record<"know" | "hard" | "unknown", number>;
 type PairFeedback = { kind: "success" | "error"; leftId: number; rightId: number } | null;
 
@@ -54,6 +57,7 @@ const PAIRS_ACTIVE_SLOTS = 5;
 const PAIRS_ROUND_SECONDS = 60;
 const initialData: LearningResponse = {
   cards: [],
+  practicePool: [],
   categories: [],
   novels: [ALL_NOVELS_LABEL],
   summary: { dueCount: 0, hardDueCount: 0, newCount: 0, totalCount: 0 },
@@ -155,7 +159,15 @@ function buildPairsPool(cards: LearningCard[], roundSeed: number) {
   return { baseSeed, cards: shuffle(cards, baseSeed) };
 }
 
-function PairsTrainer({ cards, onReload }: { cards: LearningCard[]; onReload: () => Promise<void> }) {
+function PairsTrainer({
+  cards,
+  onReload,
+  syncResults = true,
+}: {
+  cards: LearningCard[];
+  onReload: () => Promise<void>;
+  syncResults?: boolean;
+}) {
   const [roundSeed, setRoundSeed] = useState(0);
   const [leftIds, setLeftIds] = useState<number[]>([]);
   const [rightIds, setRightIds] = useState<number[]>([]);
@@ -233,19 +245,23 @@ function PairsTrainer({ cards, onReload }: { cards: LearningCard[]; onReload: ()
           return inserted;
         });
         if (nextId !== null) setQueueIndex(queueIndex + 1);
-        setSyncingCount((current) => current + 1);
-        void apiSend("/api/dashboard/review", "POST", {
-          itemId: leftId,
-          rating,
-          taskType: "pairs",
-        })
-          .then(() => { if (mountedRef.current) setMessage(""); })
-          .catch((requestError) => {
-            if (mountedRef.current) {
-              setMessage(requestError instanceof Error ? `Не удалось синхронизировать найденную пару: ${requestError.message}` : "Не удалось синхронизировать найденную пару.");
-            }
+        if (syncResults) {
+          setSyncingCount((current) => current + 1);
+          void apiSend("/api/dashboard/review", "POST", {
+            itemId: leftId,
+            rating,
+            taskType: "pairs",
           })
-          .finally(() => { if (mountedRef.current) setSyncingCount((current) => Math.max(0, current - 1)); });
+            .then(() => { if (mountedRef.current) setMessage(""); })
+            .catch((requestError) => {
+              if (mountedRef.current) {
+                setMessage(requestError instanceof Error ? `Не удалось синхронизировать найденную пару: ${requestError.message}` : "Не удалось синхронизировать найденную пару.");
+              }
+            })
+            .finally(() => { if (mountedRef.current) setSyncingCount((current) => Math.max(0, current - 1)); });
+        } else if (mountedRef.current) {
+          setMessage("");
+        }
       } else {
         setWrongAttempts((current) => current + 1);
         setHardPairIds((current) => ({ ...current, [leftId]: true, [rightId]: true }));
@@ -258,7 +274,7 @@ function PairsTrainer({ cards, onReload }: { cards: LearningCard[]; onReload: ()
     }, leftId === rightId ? 220 : 360);
 
     timeoutIdsRef.current.push(timeoutId);
-  }, [hardPairIds, locked, pool.cards, queueIndex, selectedLeftId, selectedRightId, sessionFinished]);
+  }, [hardPairIds, locked, pool.cards, queueIndex, selectedLeftId, selectedRightId, sessionFinished, syncResults]);
 
   const restartRound = () => setRoundSeed((current) => current + 1);
   const refreshCards = async () => {
@@ -284,7 +300,9 @@ function PairsTrainer({ cards, onReload }: { cards: LearningCard[]; onReload: ()
           <div className="w-16 h-16 rounded-full bg-success/15 flex items-center justify-center mx-auto"><Trophy className="w-8 h-8 text-success" /></div>
           <div className="space-y-2">
             <h2 className="text-2xl font-bold text-foreground">{finishedByDeck ? "Колода закрыта" : "Время вышло"}</h2>
-            <p className="text-foreground-secondary">За раунд найдено {matchedCount} пар из {pool.cards.length}. Точные пары идут как «Знаю», пары после ошибок как «Трудно».</p>
+            <p className="text-foreground-secondary">
+              За раунд найдено {matchedCount} пар из {pool.cards.length}. {syncResults ? "Точные пары идут как «Знаю», пары после ошибок как «Трудно»." : "Это свободная тренировка: результаты не меняют интервалы и статусы слов."}
+            </p>
           </div>
         </Card>
         <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
@@ -404,14 +422,24 @@ export default function LearningPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [message, setMessage] = useState("");
   const [completedSessionCount, setCompletedSessionCount] = useState<number | null>(null);
+  const [sessionSource, setSessionSource] = useState<LearningSessionSource>("daily");
+  const [practicePreset, setPracticePreset] = useState<PracticePreset>("random");
+  const [practiceRandomSize, setPracticeRandomSize] = useState(10);
+  const [practiceRandomSeed, setPracticeRandomSeed] = useState(0);
+  const [practiceSelectedIds, setPracticeSelectedIds] = useState<number[]>([]);
+  const [practiceDraftIds, setPracticeDraftIds] = useState<number[]>([]);
 
-  const availableNovels = data.novels.length > 0 ? data.novels : [ALL_NOVELS_LABEL];
+  const sourceCards = sessionSource === "practice" ? data.practicePool : data.cards;
+  const availableNovels = useMemo(
+    () => [ALL_NOVELS_LABEL, ...new Set(sourceCards.map((card) => card.novel))],
+    [sourceCards],
+  );
   const activeNovel = availableNovels.includes(selectedNovel) ? selectedNovel : availableNovels[0];
-  const hasSentenceCards = data.cards.some((card) => card.kind === "sentence");
+  const hasSentenceCards = sourceCards.some((card) => card.kind === "sentence");
   const activeKind = selectedKind === "sentence" && !hasSentenceCards ? "all" : selectedKind;
   const novelScopedCards = useMemo(
-    () => data.cards.filter((card) => activeNovel === ALL_NOVELS_LABEL || card.novel === activeNovel),
-    [activeNovel, data.cards],
+    () => sourceCards.filter((card) => activeNovel === ALL_NOVELS_LABEL || card.novel === activeNovel),
+    [activeNovel, sourceCards],
   );
   const shortcutScopedCards = useMemo(() => {
     const nextCards = cardsForShortcut(novelScopedCards, selectedShortcut);
@@ -426,19 +454,41 @@ export default function LearningPage() {
     () => shortcutScopedCards.filter((card) => activeKind === "all" || card.kind === activeKind),
     [activeKind, shortcutScopedCards],
   );
+  const selectedPracticeCards = useMemo(() => {
+    if (sessionSource !== "practice") {
+      return filteredCards;
+    }
+
+    if (practicePreset === "custom") {
+      const selectedIds = new Set(practiceSelectedIds);
+      return filteredCards.filter((card) => selectedIds.has(card.id));
+    }
+
+    const limit =
+      practiceRandomSize <= 0
+        ? filteredCards.length
+        : Math.min(practiceRandomSize, filteredCards.length);
+    const seed =
+      practiceRandomSeed +
+      filteredCards.reduce((sum, card) => sum + card.id, 0) +
+      filteredCards.length * 17;
+
+    return shuffle(filteredCards, seed || 17).slice(0, limit);
+  }, [filteredCards, practicePreset, practiceRandomSeed, practiceRandomSize, practiceSelectedIds, sessionSource]);
+  const activeCards = sessionSource === "practice" ? selectedPracticeCards : filteredCards;
   const filteredCardMap = useMemo(
-    () => new Map(filteredCards.map((card) => [card.id, card])),
-    [filteredCards],
+    () => new Map(activeCards.map((card) => [card.id, card])),
+    [activeCards],
   );
   const sessionCards = useMemo(() => {
     if (selectedMode === "pairs") {
-      return filteredCards;
+      return activeCards;
     }
 
     return sessionCardIds
       .map((cardId) => filteredCardMap.get(cardId))
       .filter((card): card is LearningCard => Boolean(card));
-  }, [filteredCardMap, filteredCards, selectedMode, sessionCardIds]);
+  }, [activeCards, filteredCardMap, selectedMode, sessionCardIds]);
   const shortcutButtons = useMemo<Array<{
     id: LearningShortcut;
     label: string;
@@ -483,7 +533,8 @@ export default function LearningPage() {
     ],
     [novelScopedCards],
   );
-  const filteredIdsKey = filteredCards.map((card) => card.id).join("-") || "empty";
+  const practiceDraftSet = useMemo(() => new Set(practiceDraftIds), [practiceDraftIds]);
+  const filteredIdsKey = activeCards.map((card) => card.id).join("-") || "empty";
   const safeIndex = Math.min(currentIndex, Math.max(sessionCards.length - 1, 0));
   const currentCard = sessionCards[safeIndex];
   const effectiveMode =
@@ -502,7 +553,7 @@ export default function LearningPage() {
   const reviewedCount = sessionSummary.know + sessionSummary.hard + sessionSummary.unknown;
   const activeSessionCount =
     selectedMode === "pairs"
-      ? filteredCards.length
+      ? activeCards.length
       : flashcardsComplete
         ? completedSessionCount ?? sessionBaseCount
         : sessionBaseCount;
@@ -514,14 +565,15 @@ export default function LearningPage() {
         : reviewedCount;
   const remainingCount =
     selectedMode === "pairs"
-      ? filteredCards.length
+      ? activeCards.length
       : flashcardsComplete
         ? 0
         : Math.max(activeSessionCount - reviewedCount, 0);
+  const practiceSelectionCount = practicePreset === "custom" ? practiceSelectedIds.length : activeCards.length;
   const isEmptySelection =
     !loading &&
     !pendingSessionReset &&
-    (selectedMode === "pairs" ? filteredCards.length === 0 : sessionCards.length === 0) &&
+    (selectedMode === "pairs" ? activeCards.length === 0 : sessionCards.length === 0) &&
     !flashcardsComplete;
 
   const resetFlashcardSession = () => {
@@ -538,11 +590,11 @@ export default function LearningPage() {
   useEffect(() => {
     if (selectedMode === "pairs" || !pendingSessionReset || loading) return;
 
-    const nextIds = filteredCards.map((card) => card.id);
+    const nextIds = activeCards.map((card) => card.id);
     setSessionCardIds(nextIds);
     setSessionBaseCount(nextIds.length);
     setPendingSessionReset(false);
-  }, [filteredCards, loading, pendingSessionReset, selectedMode]);
+  }, [activeCards, loading, pendingSessionReset, selectedMode]);
 
   useEffect(() => {
     if (selectedMode === "pairs") return;
@@ -570,6 +622,39 @@ export default function LearningPage() {
     resetFlashcardSession();
   };
 
+  const handleSessionSourceChange = (nextSource: LearningSessionSource) => {
+    setSessionSource(nextSource);
+    setMessage("");
+    resetFlashcardSession();
+  };
+
+  const buildRandomPracticeSet = () => {
+    setPracticePreset("random");
+    setPracticeRandomSeed((current) => current + 1);
+    setMessage("");
+    resetFlashcardSession();
+  };
+
+  const applyCustomPracticeSet = () => {
+    setPracticePreset("custom");
+    setPracticeSelectedIds(practiceDraftIds);
+    setMessage("");
+    resetFlashcardSession();
+  };
+
+  const clearPracticeSelection = () => {
+    setPracticeDraftIds([]);
+    setPracticeSelectedIds([]);
+    setMessage("");
+    resetFlashcardSession();
+  };
+
+  const refreshPracticePairs = async () => {
+    if (practicePreset === "random") {
+      setPracticeRandomSeed((current) => current + 1);
+    }
+  };
+
   const submitReview = async (
     rating: "know" | "hard" | "unknown",
     taskType: LearningMode = "flashcards",
@@ -581,11 +666,13 @@ export default function LearningPage() {
     try {
       setIsSubmitting(true);
       setMessage("");
-      await apiSend("/api/dashboard/review", "POST", {
-        itemId: currentCard.id,
-        rating,
-        taskType,
-      });
+      if (sessionSource === "daily") {
+        await apiSend("/api/dashboard/review", "POST", {
+          itemId: currentCard.id,
+          rating,
+          taskType,
+        });
+      }
       setSessionSummary((current) => ({ ...current, [rating]: current[rating] + 1 }));
       setShowTranslation(false);
       setSessionCardIds((current) => current.filter((cardId) => cardId !== currentCard.id));
@@ -596,7 +683,9 @@ export default function LearningPage() {
         const nextLength = previousLength - 1;
         setCurrentIndex(Math.min(previousIndex, Math.max(nextLength - 1, 0)));
       }
-      await reload();
+      if (sessionSource === "daily") {
+        await reload();
+      }
     } catch (requestError) {
       setMessage(requestError instanceof Error ? requestError.message : "Не удалось сохранить результат повторения.");
     } finally {
@@ -607,20 +696,52 @@ export default function LearningPage() {
   return (
     <div className="space-y-8 max-w-6xl mx-auto">
       <div>
-        <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Что повторим сегодня?</h1>
-        <p className="mt-2 text-foreground-secondary flex flex-wrap items-center gap-x-3 gap-y-1 text-sm sm:text-base">
-          <span>Сегодня: <span className="text-foreground font-semibold">{data.summary.dueCount} повторений</span></span>
-          <span className="text-foreground-muted">|</span>
-          <span>Трудных: <span className="text-warning font-semibold">{data.summary.hardDueCount}</span></span>
-          <span className="text-foreground-muted">|</span>
-          <span>Новых: <span className="text-accent font-semibold">{data.summary.newCount}</span></span>
-          <span className="text-foreground-muted">|</span>
-          <span>В сессии: <span className="text-foreground font-semibold">{activeSessionCount}</span></span>
-          <span className="text-foreground-muted">|</span>
-          <span>Выполнено: <span className="text-success font-semibold">{progressCount}</span></span>
-          <span className="text-foreground-muted">|</span>
-          <span>Осталось: <span className="text-warning font-semibold">{remainingCount}</span></span>
-        </p>
+        <h1 className="text-2xl sm:text-3xl font-bold text-foreground">
+          {sessionSource === "daily" ? "Что повторим сегодня?" : "Свободная тренировка"}
+        </h1>
+        {sessionSource === "daily" ? (
+          <p className="mt-2 text-foreground-secondary flex flex-wrap items-center gap-x-3 gap-y-1 text-sm sm:text-base">
+            <span>Сегодня: <span className="text-foreground font-semibold">{data.summary.dueCount} повторений</span></span>
+            <span className="text-foreground-muted">|</span>
+            <span>Трудных: <span className="text-warning font-semibold">{data.summary.hardDueCount}</span></span>
+            <span className="text-foreground-muted">|</span>
+            <span>Новых: <span className="text-accent font-semibold">{data.summary.newCount}</span></span>
+            <span className="text-foreground-muted">|</span>
+            <span>В сессии: <span className="text-foreground font-semibold">{activeSessionCount}</span></span>
+            <span className="text-foreground-muted">|</span>
+            <span>Выполнено: <span className="text-success font-semibold">{progressCount}</span></span>
+            <span className="text-foreground-muted">|</span>
+            <span>Осталось: <span className="text-warning font-semibold">{remainingCount}</span></span>
+          </p>
+        ) : (
+          <p className="mt-2 text-foreground-secondary flex flex-wrap items-center gap-x-3 gap-y-1 text-sm sm:text-base">
+            <span>В пуле: <span className="text-foreground font-semibold">{filteredCards.length}</span></span>
+            <span className="text-foreground-muted">|</span>
+            <span>В наборе: <span className="text-foreground font-semibold">{practiceSelectionCount}</span></span>
+            <span className="text-foreground-muted">|</span>
+            <span>Выполнено: <span className="text-success font-semibold">{progressCount}</span></span>
+            <span className="text-foreground-muted">|</span>
+            <span>Осталось: <span className="text-warning font-semibold">{remainingCount}</span></span>
+            <span className="text-foreground-muted">|</span>
+            <span className="text-accent">Результаты не меняют интервалы и статусы</span>
+          </p>
+        )}
+        <div className="mt-4 inline-flex rounded-xl border border-border bg-background-card p-1">
+          <button
+            type="button"
+            onClick={() => handleSessionSourceChange("daily")}
+            className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${sessionSource === "daily" ? "bg-accent text-background" : "text-foreground-secondary hover:text-foreground"}`}
+          >
+            Учить сегодня
+          </button>
+          <button
+            type="button"
+            onClick={() => handleSessionSourceChange("practice")}
+            className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${sessionSource === "practice" ? "bg-accent text-background" : "text-foreground-secondary hover:text-foreground"}`}
+          >
+            Свободная тренировка
+          </button>
+        </div>
       </div>
 
       {error ? <Card className="border-danger/30 bg-danger/10 text-danger">Не удалось загрузить обучение: {error}</Card> : null}
@@ -628,12 +749,12 @@ export default function LearningPage() {
       <div className="grid grid-cols-1 lg:grid-cols-[repeat(4,minmax(0,1fr))_320px] gap-4">
         <button type="button" onClick={() => { setSelectedMode("flashcards"); resetFlashcardSession(); }} className={`rounded-2xl border p-5 text-left transition-colors ${selectedMode === "flashcards" ? "border-accent bg-accent-light/40" : "border-border bg-background-card hover:border-border-hover hover:bg-background-hover"}`}>
           <div className="flex items-start justify-between gap-4"><div><p className="text-sm font-medium text-foreground-secondary">Режим</p><h2 className="mt-1 text-xl font-semibold text-foreground">Карточки</h2></div><Brain className={`w-6 h-6 ${selectedMode === "flashcards" ? "text-accent" : "text-foreground-secondary"}`} /></div>
-          <p className="mt-3 text-sm text-foreground-secondary">Классический SRS-повтор: открываешь перевод, оцениваешь себя и двигаешь карточку по прогрессу.</p>
-          <div className="mt-4 flex items-center gap-2"><Badge variant={selectedMode === "flashcards" ? "accent" : "default"}>{selectedMode === "pairs" ? filteredCards.length : activeSessionCount} карточек в сессии</Badge><Badge variant="default">Оценка: знаю / трудно / не знаю</Badge></div>
+          <p className="mt-3 text-sm text-foreground-secondary">{sessionSource === "daily" ? "Классический SRS-повтор: открываешь перевод, оцениваешь себя и двигаешь карточку по прогрессу." : "Свободная разминка по выбранному набору: играешь в карточки без изменения интервалов."}</p>
+          <div className="mt-4 flex items-center gap-2"><Badge variant={selectedMode === "flashcards" ? "accent" : "default"}>{selectedMode === "pairs" ? activeCards.length : activeSessionCount} карточек в сессии</Badge><Badge variant="default">Оценка: знаю / трудно / не знаю</Badge></div>
         </button>
         <button type="button" onClick={() => { setSelectedMode("pairs"); resetFlashcardSession(); }} className={`rounded-2xl border p-5 text-left transition-colors ${selectedMode === "pairs" ? "border-accent bg-accent-light/40" : "border-border bg-background-card hover:border-border-hover hover:bg-background-hover"}`}>
           <div className="flex items-start justify-between gap-4"><div><p className="text-sm font-medium text-foreground-secondary">Режим</p><h2 className="mt-1 text-xl font-semibold text-foreground">Пары</h2></div><Layers className={`w-6 h-6 ${selectedMode === "pairs" ? "text-accent" : "text-foreground-secondary"}`} /></div>
-          <p className="mt-3 text-sm text-foreground-secondary">Две колонки по 5 слов, таймер на 60 секунд и мгновенная подстановка новой пары после правильного совпадения.</p>
+          <p className="mt-3 text-sm text-foreground-secondary">{sessionSource === "daily" ? "Две колонки по 5 слов, таймер на 60 секунд и мгновенная подстановка новой пары после правильного совпадения." : "Спринт по выбранному набору: можно гонять пары сколько угодно, не трогая SRS-прогресс."}</p>
           <div className="mt-4 flex items-center gap-2"><Badge variant={selectedMode === "pairs" ? "accent" : "default"}>5 слева / 5 справа</Badge><Badge variant="default">Спринт на скорость</Badge></div>
         </button>
         <button type="button" onClick={() => { setSelectedMode("ru_en_choice"); resetFlashcardSession(); }} className={`rounded-2xl border p-5 text-left transition-colors ${selectedMode === "ru_en_choice" ? "border-accent bg-accent-light/40" : "border-border bg-background-card hover:border-border-hover hover:bg-background-hover"}`}>
@@ -692,12 +813,112 @@ export default function LearningPage() {
         {shortcutButtons.length < 5 ? <div className="hidden lg:block" aria-hidden="true" /> : null}
       </div>
 
+      {sessionSource === "practice" ? (
+        <Card className="space-y-4">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <h2 className="text-xl font-semibold text-foreground">Собери набор для тренировки</h2>
+              <p className="text-sm text-foreground-secondary">Можешь взять случайную колоду или вручную отметить слова из текущего фильтра. Любой режим игр будет работать на этом наборе.</p>
+            </div>
+            <Badge variant={practicePreset === "custom" ? "warning" : "accent"}>
+              {practicePreset === "custom" ? "Свой набор" : "Случайный набор"}
+            </Badge>
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div className="rounded-xl border border-border bg-background-hover p-4 space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium text-foreground">Случайный набор</p>
+                  <p className="text-xs text-foreground-secondary">Берём карточки из текущего фильтра и перемешиваем их.</p>
+                </div>
+                <select
+                  value={practiceRandomSize}
+                  onChange={(event) => setPracticeRandomSize(Number(event.target.value))}
+                  className="bg-background-card border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent"
+                >
+                  <option value={10}>10 карточек</option>
+                  <option value={20}>20 карточек</option>
+                  <option value={30}>30 карточек</option>
+                  <option value={9999}>Все доступные</option>
+                </select>
+              </div>
+              <div className="flex flex-wrap gap-3">
+                <Button variant="secondary" onClick={buildRandomPracticeSet}>Собрать случайный набор</Button>
+                <span className="text-sm text-foreground-secondary self-center">Сейчас по фильтру доступно {filteredCards.length} карточек.</span>
+              </div>
+            </div>
+            <div className="rounded-xl border border-border bg-background-hover p-4 space-y-3">
+              <div>
+                <p className="text-sm font-medium text-foreground">Свой набор</p>
+                <p className="text-xs text-foreground-secondary">Отметь слова вручную и запусти тренировку на выбранной колоде.</p>
+              </div>
+              <div className="flex flex-wrap gap-3">
+                <Button variant="secondary" onClick={applyCustomPracticeSet} disabled={practiceDraftIds.length === 0}>Тренироваться на выбранных</Button>
+                <Button variant="ghost" onClick={clearPracticeSelection}>Сбросить выбор</Button>
+                <span className="text-sm text-foreground-secondary self-center">Отмечено: {practiceDraftIds.length}</span>
+              </div>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-3">
+            <Button
+              variant="ghost"
+              onClick={() => setPracticeDraftIds(filteredCards.map((card) => card.id))}
+              disabled={filteredCards.length === 0}
+            >
+              Выбрать всё по фильтру
+            </Button>
+            <Button variant="ghost" onClick={() => setPracticeDraftIds([])} disabled={practiceDraftIds.length === 0}>
+              Снять всё
+            </Button>
+          </div>
+          <div className="max-h-80 overflow-y-auto rounded-xl border border-border bg-background-card">
+            {filteredCards.length === 0 ? (
+              <div className="px-4 py-6 text-sm text-foreground-secondary">
+                Под текущие фильтры в словаре пока нет карточек для свободной тренировки.
+              </div>
+            ) : (
+              <div className="divide-y divide-border">
+                {filteredCards.map((card) => (
+                  <label key={`practice-${card.id}`} className="flex cursor-pointer items-start gap-3 px-4 py-3 hover:bg-background-hover">
+                    <input
+                      type="checkbox"
+                      className="mt-1 h-4 w-4 rounded border-border bg-background-card text-accent focus:ring-accent"
+                      checked={practiceDraftSet.has(card.id)}
+                      onChange={(event) => {
+                        setPracticeDraftIds((current) =>
+                          event.target.checked
+                            ? [...current, card.id]
+                            : current.filter((itemId) => itemId !== card.id),
+                        );
+                      }}
+                    />
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="font-medium text-foreground">{card.en}</p>
+                        <Badge variant={studyStatusMeta[card.status].variant}>{studyStatusMeta[card.status].label}</Badge>
+                        <Badge variant="default">{kindLabel(card.kind)}</Badge>
+                      </div>
+                      <p className="mt-1 text-sm text-accent">{card.ru}</p>
+                      <p className="mt-1 text-xs text-foreground-muted">{card.novel}</p>
+                    </div>
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+        </Card>
+      ) : null}
+
       {isEmptySelection ? (
         <Card className="space-y-4">
           <div className="space-y-2">
-            <h2 className="text-xl font-semibold text-foreground">Под эту подборку пока нет карточек</h2>
+            <h2 className="text-xl font-semibold text-foreground">
+              {sessionSource === "daily" ? "Под эту подборку пока нет карточек" : "Набор для тренировки ещё не собран"}
+            </h2>
             <p className="text-foreground-secondary">
-              Сохрани новые слова в моде, выбери другую быструю подборку, поменяй фильтр или дождись времени следующего повторения.
+              {sessionSource === "daily"
+                ? "Сохрани новые слова в моде, выбери другую быструю подборку, поменяй фильтр или дождись времени следующего повторения."
+                : "Собери случайную колоду или выбери слова вручную из списка выше, и затем запускай любой игровой режим."}
             </p>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -720,13 +941,20 @@ export default function LearningPage() {
           </div>
         </Card>
       ) : selectedMode === "pairs" ? (
-        <PairsTrainer key={`pairs-${filteredIdsKey}`} cards={filteredCards} onReload={reload} />
+        <PairsTrainer
+          key={`pairs-${sessionSource}-${practicePreset}-${filteredIdsKey}`}
+          cards={activeCards}
+          onReload={sessionSource === "daily" ? reload : refreshPracticePairs}
+          syncResults={sessionSource === "daily"}
+        />
       ) : flashcardsComplete ? (
         <div className="max-w-2xl mx-auto space-y-8">
           <div className="text-center space-y-4">
             <div className="w-20 h-20 rounded-full bg-success/15 flex items-center justify-center mx-auto"><Trophy className="w-10 h-10 text-success" /></div>
             <h2 className="text-3xl font-bold text-foreground">Сессия карточек завершена</h2>
-            <p className="text-foreground-secondary">Результаты уже сохранены в прогресс и историю действий.</p>
+            <p className="text-foreground-secondary">
+              {sessionSource === "daily" ? "Результаты уже сохранены в прогресс и историю действий." : "Это была свободная тренировка: ты прогнал набор, но не менял интервалы повторения."}
+            </p>
           </div>
           <Card className="space-y-4">
             <div className="flex justify-between items-center"><span className="text-foreground-secondary">Карточек повторено</span><span className="text-foreground font-bold text-lg">{completedSessionCount}</span></div>
@@ -737,7 +965,11 @@ export default function LearningPage() {
           </Card>
           <div className="flex gap-3 justify-center">
             <Button variant="secondary" onClick={resetFlashcardSession}><RotateCcw className="w-4 h-4 mr-2" />Начать заново</Button>
-            <Button variant="primary" href="/dashboard/progress">Перейти к прогрессу</Button>
+            {sessionSource === "daily" ? (
+              <Button variant="primary" href="/dashboard/progress">Перейти к прогрессу</Button>
+            ) : (
+              <Button variant="primary" onClick={buildRandomPracticeSet}>Собрать новый набор</Button>
+            )}
           </div>
         </div>
       ) : (
@@ -807,9 +1039,19 @@ export default function LearningPage() {
           {message ? <p className="text-sm text-foreground-secondary">{message}</p> : null}
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="flex flex-wrap items-center gap-4 text-sm text-foreground-secondary">
-              <span className="flex items-center gap-1.5"><Clock className="w-4 h-4" />Лимит дня: {data.settings.dailyWords}</span>
-              <span>Новых в день: {data.settings.dailyNewWords}</span>
-              <span>{data.settings.prioritizeDifficult ? "Сложные слова в приоритете" : "Обычный порядок"}</span>
+              {sessionSource === "daily" ? (
+                <>
+                  <span className="flex items-center gap-1.5"><Clock className="w-4 h-4" />Лимит дня: {data.settings.dailyWords}</span>
+                  <span>Новых в день: {data.settings.dailyNewWords}</span>
+                  <span>{data.settings.prioritizeDifficult ? "Сложные слова в приоритете" : "Обычный порядок"}</span>
+                </>
+              ) : (
+                <>
+                  <span className="flex items-center gap-1.5"><Clock className="w-4 h-4" />В выбранном наборе: {activeSessionCount}</span>
+                  <span>{practicePreset === "custom" ? "Ручной набор" : "Случайная колода"}</span>
+                  <span>Свободная практика без изменения прогресса</span>
+                </>
+              )}
             </div>
             {effectiveMode === "flashcards" && showTranslation ? (
               <div className="flex flex-wrap gap-2 justify-center">

@@ -119,6 +119,38 @@ function mapReviewRow(row: typeof reviewEvents.$inferSelect): ReviewEventRecord 
   };
 }
 
+function buildLearningCard(
+  item: StudyItemRecord,
+  latestByItemId: Map<number, StudyItemOccurrenceRecord>,
+) {
+  const latestOccurrence = latestByItemId.get(item.id);
+  const context = latestOccurrence?.contextOriginal ?? "";
+  const contextWordPosition = latestOccurrence?.contextWordPosition ?? null;
+  const cloze = buildClozeData({
+    context,
+    answer: item.text,
+    contextWordPosition,
+  });
+
+  return {
+    id: item.id,
+    en: item.text,
+    ru: item.translation,
+    context,
+    contextTranslation: latestOccurrence?.contextTranslation ?? "",
+    contextWordPosition,
+    kind: item.kind,
+    novel: latestOccurrence?.novelTitle ?? "РќРµ СѓРєР°Р·Р°РЅРѕ",
+    status: item.status,
+    isActive: item.isActive,
+    isDue: item.isActive && item.status !== "learned" && hasReachedReviewDay(item.nextReviewAt),
+    learningStage: item.learningStage,
+    hasCloze: canBuildCloze(item.text, context, contextWordPosition),
+    clozeText: cloze.clozeText,
+    clozeAnswer: cloze.clozeAnswer,
+  };
+}
+
 function latestOccurrenceMap(occurrences: StudyItemOccurrenceRecord[]) {
   const map = new Map<number, StudyItemOccurrenceRecord>();
   for (const occurrence of [...occurrences].sort((a, b) => b.createdAt.localeCompare(a.createdAt))) {
@@ -502,9 +534,17 @@ export async function getLearningPageData(userId: number) {
         clozeAnswer: cloze.clozeAnswer,
       };
     });
+    const practicePool = allItems
+      .slice()
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+      .map((item) => {
+        const patch = activatedPatches.get(item.id);
+        return buildLearningCard(patch ? { ...item, ...patch } : item, latestByItemId);
+      });
 
     return {
       cards,
+      practicePool,
       summary: {
         dueCount: queue.dueCount,
         hardDueCount: queue.hardDueCount,
