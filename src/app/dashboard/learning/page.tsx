@@ -34,6 +34,7 @@ type ReviewSummary = Record<"know" | "hard" | "unknown", number>;
 type PairFeedback = { kind: "success" | "error"; leftId: number; rightId: number } | null;
 
 const ALL_NOVELS_LABEL = "Все новеллы";
+const MODE_ORDER: LearningMode[] = ["pairs", "flashcards", "ru_en_choice", "cloze_choice"];
 const PAIRS_ACTIVE_SLOTS = 5;
 const PAIRS_ROUND_SECONDS = 60;
 const initialData: LearningResponse = {
@@ -477,27 +478,39 @@ export default function LearningPage() {
 
     return shuffle(filteredCards, seed || 17).slice(0, limit);
   }, [filteredCards, practicePreset, practiceRandomSeed, practiceRandomSize, practiceSelectedIds, sessionSource]);
-  const ratedModeCards = useMemo(
-    () =>
-      filteredCards.filter(
-        (card) => !card.completedToday && card.currentTaskType === selectedMode,
-      ),
-    [filteredCards, selectedMode],
+  const ratedAvailableByMode = useMemo(
+    () => ({
+      pairs: filteredCards.filter((card) => !card.completedToday && card.currentTaskType === "pairs").length,
+      flashcards: filteredCards.filter((card) => !card.completedToday && card.currentTaskType === "flashcards").length,
+      ru_en_choice: filteredCards.filter((card) => !card.completedToday && card.currentTaskType === "ru_en_choice").length,
+      cloze_choice: filteredCards.filter((card) => !card.completedToday && card.currentTaskType === "cloze_choice").length,
+    }),
+    [filteredCards],
   );
-  const activeCards = sessionSource === "practice" ? selectedPracticeCards : ratedModeCards;
+  const ratedSelectedMode = useMemo<LearningMode>(
+    () => MODE_ORDER.find((mode) => ratedAvailableByMode[mode] > 0) ?? "flashcards",
+    [ratedAvailableByMode],
+  );
+  const activeMode = shouldSyncDailyReviews ? ratedSelectedMode : selectedMode;
+  const activeCards =
+    sessionSource === "practice"
+      ? selectedPracticeCards
+      : filteredCards.filter(
+          (card) => !card.completedToday && card.currentTaskType === ratedSelectedMode,
+        );
   const filteredCardMap = useMemo(
     () => new Map(activeCards.map((card) => [card.id, card])),
     [activeCards],
   );
   const sessionCards = useMemo(() => {
-    if (selectedMode === "pairs" || shouldSyncDailyReviews) {
+    if (activeMode === "pairs" || shouldSyncDailyReviews) {
       return activeCards;
     }
 
     return sessionCardIds
       .map((cardId) => filteredCardMap.get(cardId))
       .filter((card): card is LearningCard => Boolean(card));
-  }, [activeCards, filteredCardMap, selectedMode, sessionCardIds, shouldSyncDailyReviews]);
+  }, [activeCards, activeMode, filteredCardMap, sessionCardIds, shouldSyncDailyReviews]);
   const shortcutButtons = useMemo<Array<{
     id: LearningShortcut;
     label: string;
@@ -547,9 +560,9 @@ export default function LearningPage() {
   const safeIndex = Math.min(currentIndex, Math.max(sessionCards.length - 1, 0));
   const currentCard = sessionCards[safeIndex];
   const effectiveMode =
-    selectedMode === "cloze_choice" && currentCard && !currentCard.hasCloze
+    activeMode === "cloze_choice" && currentCard && !currentCard.hasCloze
       ? "ru_en_choice"
-      : selectedMode;
+      : activeMode;
   const clozePrompt = currentCard?.clozeText ?? null;
   const choiceOptions = useMemo(
     () =>
@@ -564,21 +577,21 @@ export default function LearningPage() {
     : sessionSummary.know + sessionSummary.hard + sessionSummary.unknown;
   const activeSessionCount = shouldSyncDailyReviews
     ? data.ratedSession.totalWords
-    : selectedMode === "pairs"
+    : activeMode === "pairs"
       ? activeCards.length
       : flashcardsComplete
         ? completedSessionCount ?? sessionBaseCount
         : sessionBaseCount;
   const progressCount = shouldSyncDailyReviews
     ? data.ratedSession.completedWords
-    : selectedMode === "pairs"
+    : activeMode === "pairs"
       ? 0
       : flashcardsComplete
         ? completedSessionCount ?? reviewedCount
         : reviewedCount;
   const remainingCount = shouldSyncDailyReviews
     ? data.ratedSession.remainingWords
-    : selectedMode === "pairs"
+    : activeMode === "pairs"
       ? activeCards.length
       : flashcardsComplete
         ? 0
@@ -602,18 +615,20 @@ export default function LearningPage() {
   };
 
   useEffect(() => {
-    if (selectedMode === "pairs" || !pendingSessionReset || loading) return;
+    if (activeMode === "pairs" || !pendingSessionReset || loading) return;
+ 
+    if (shouldSyncDailyReviews) return;
 
     const nextIds = activeCards.map((card) => card.id);
     setSessionCardIds(nextIds);
     setSessionBaseCount(nextIds.length);
     setPendingSessionReset(false);
-  }, [activeCards, loading, pendingSessionReset, selectedMode]);
+  }, [activeCards, activeMode, loading, pendingSessionReset, shouldSyncDailyReviews]);
 
   useEffect(() => {
-    if (selectedMode === "pairs") return;
+    if (activeMode === "pairs") return;
     setCurrentIndex((current) => Math.min(current, Math.max(sessionCards.length - 1, 0)));
-  }, [selectedMode, sessionCards.length]);
+  }, [activeMode, sessionCards.length]);
 
   const handleKindChange = (nextKind: KindFilter) => {
     setSelectedKind(nextKind);
@@ -762,25 +777,25 @@ export default function LearningPage() {
 
       {error ? <Card className="border-danger/30 bg-danger/10 text-danger">Не удалось загрузить обучение: {error}</Card> : null}
       <div className="grid grid-cols-1 lg:grid-cols-[repeat(4,minmax(0,1fr))_320px] gap-4">
-        <button type="button" onClick={() => { setSelectedMode("flashcards"); resetFlashcardSession(); }} className={`rounded-2xl border p-5 text-left transition-colors ${selectedMode === "flashcards" ? "border-accent bg-accent-light/40" : "border-border bg-background-card hover:border-border-hover hover:bg-background-hover"}`}>
-          <div className="flex items-start justify-between gap-4"><div><p className="text-sm font-medium text-foreground-secondary">Режим</p><h2 className="mt-1 text-xl font-semibold text-foreground">Карточки</h2></div><Brain className={`w-6 h-6 ${selectedMode === "flashcards" ? "text-accent" : "text-foreground-secondary"}`} /></div>
+        <button type="button" onClick={() => { if (!shouldSyncDailyReviews) { setSelectedMode("flashcards"); resetFlashcardSession(); } }} disabled={shouldSyncDailyReviews} className={`rounded-2xl border p-5 text-left transition-colors ${activeMode === "flashcards" ? "border-accent bg-accent-light/40" : "border-border bg-background-card"} ${shouldSyncDailyReviews ? "cursor-default" : "hover:border-border-hover hover:bg-background-hover"}`}>
+          <div className="flex items-start justify-between gap-4"><div><p className="text-sm font-medium text-foreground-secondary">Режим</p><h2 className="mt-1 text-xl font-semibold text-foreground">Карточки</h2></div><Brain className={`w-6 h-6 ${activeMode === "flashcards" ? "text-accent" : "text-foreground-secondary"}`} /></div>
           <p className="mt-3 text-sm text-foreground-secondary">{shouldSyncDailyReviews ? "Классический SRS-повтор: открываешь перевод, оцениваешь себя и двигаешь карточку по прогрессу." : "Свободная разминка по выбранному набору: играешь в карточки без изменения интервалов."}</p>
-          <div className="mt-4 flex items-center gap-2"><Badge variant={selectedMode === "flashcards" ? "accent" : "default"}>{shouldSyncDailyReviews ? data.ratedSession.availableByMode.flashcards : activeSessionCount} доступно сейчас</Badge><Badge variant="default">Оценка: знаю / трудно / не знаю</Badge></div>
+          <div className="mt-4 flex items-center gap-2"><Badge variant={activeMode === "flashcards" ? "accent" : "default"}>{shouldSyncDailyReviews ? ratedAvailableByMode.flashcards : activeSessionCount} доступно сейчас</Badge><Badge variant="default">{shouldSyncDailyReviews ? "Шаг откроется автоматически" : "Оценка: знаю / трудно / не знаю"}</Badge></div>
         </button>
-        <button type="button" onClick={() => { setSelectedMode("pairs"); resetFlashcardSession(); }} className={`rounded-2xl border p-5 text-left transition-colors ${selectedMode === "pairs" ? "border-accent bg-accent-light/40" : "border-border bg-background-card hover:border-border-hover hover:bg-background-hover"}`}>
-          <div className="flex items-start justify-between gap-4"><div><p className="text-sm font-medium text-foreground-secondary">Режим</p><h2 className="mt-1 text-xl font-semibold text-foreground">Пары</h2></div><Layers className={`w-6 h-6 ${selectedMode === "pairs" ? "text-accent" : "text-foreground-secondary"}`} /></div>
+        <button type="button" onClick={() => { if (!shouldSyncDailyReviews) { setSelectedMode("pairs"); resetFlashcardSession(); } }} disabled={shouldSyncDailyReviews} className={`rounded-2xl border p-5 text-left transition-colors ${activeMode === "pairs" ? "border-accent bg-accent-light/40" : "border-border bg-background-card"} ${shouldSyncDailyReviews ? "cursor-default" : "hover:border-border-hover hover:bg-background-hover"}`}>
+          <div className="flex items-start justify-between gap-4"><div><p className="text-sm font-medium text-foreground-secondary">Режим</p><h2 className="mt-1 text-xl font-semibold text-foreground">Пары</h2></div><Layers className={`w-6 h-6 ${activeMode === "pairs" ? "text-accent" : "text-foreground-secondary"}`} /></div>
           <p className="mt-3 text-sm text-foreground-secondary">{shouldSyncDailyReviews ? "Две колонки по 5 слов, таймер на 60 секунд и мгновенная подстановка новой пары после правильного совпадения." : "Спринт по выбранному набору: можно гонять пары сколько угодно, не трогая SRS-прогресс."}</p>
-          <div className="mt-4 flex items-center gap-2"><Badge variant={selectedMode === "pairs" ? "accent" : "default"}>{shouldSyncDailyReviews ? data.ratedSession.availableByMode.pairs : 5} доступно сейчас</Badge><Badge variant="default">Спринт на скорость</Badge></div>
+          <div className="mt-4 flex items-center gap-2"><Badge variant={activeMode === "pairs" ? "accent" : "default"}>{shouldSyncDailyReviews ? ratedAvailableByMode.pairs : 5} доступно сейчас</Badge><Badge variant="default">{shouldSyncDailyReviews ? "Стартовый шаг рейтинга" : "Спринт на скорость"}</Badge></div>
         </button>
-        <button type="button" onClick={() => { setSelectedMode("ru_en_choice"); resetFlashcardSession(); }} className={`rounded-2xl border p-5 text-left transition-colors ${selectedMode === "ru_en_choice" ? "border-accent bg-accent-light/40" : "border-border bg-background-card hover:border-border-hover hover:bg-background-hover"}`}>
-          <div className="flex items-start justify-between gap-4"><div><p className="text-sm font-medium text-foreground-secondary">Сильный режим</p><h2 className="mt-1 text-xl font-semibold text-foreground">RU → EN</h2></div><Check className={`w-6 h-6 ${selectedMode === "ru_en_choice" ? "text-accent" : "text-foreground-secondary"}`} /></div>
+        <button type="button" onClick={() => { if (!shouldSyncDailyReviews) { setSelectedMode("ru_en_choice"); resetFlashcardSession(); } }} disabled={shouldSyncDailyReviews} className={`rounded-2xl border p-5 text-left transition-colors ${activeMode === "ru_en_choice" ? "border-accent bg-accent-light/40" : "border-border bg-background-card"} ${shouldSyncDailyReviews ? "cursor-default" : "hover:border-border-hover hover:bg-background-hover"}`}>
+          <div className="flex items-start justify-between gap-4"><div><p className="text-sm font-medium text-foreground-secondary">Сильный режим</p><h2 className="mt-1 text-xl font-semibold text-foreground">RU → EN</h2></div><Check className={`w-6 h-6 ${activeMode === "ru_en_choice" ? "text-accent" : "text-foreground-secondary"}`} /></div>
           <p className="mt-3 text-sm text-foreground-secondary">Видишь перевод на русском и выбираешь правильный английский вариант. Этот режим участвует в финальном закреплении слова.</p>
-          <div className="mt-4 flex items-center gap-2"><Badge variant={selectedMode === "ru_en_choice" ? "accent" : "default"}>{shouldSyncDailyReviews ? data.ratedSession.availableByMode.ru_en_choice : 4} доступно сейчас</Badge><Badge variant="default">Сильная проверка</Badge></div>
+          <div className="mt-4 flex items-center gap-2"><Badge variant={activeMode === "ru_en_choice" ? "accent" : "default"}>{shouldSyncDailyReviews ? ratedAvailableByMode.ru_en_choice : 4} доступно сейчас</Badge><Badge variant="default">{shouldSyncDailyReviews ? "Откроется после лёгких шагов" : "Сильная проверка"}</Badge></div>
         </button>
-        <button type="button" onClick={() => { setSelectedMode("cloze_choice"); resetFlashcardSession(); }} className={`rounded-2xl border p-5 text-left transition-colors ${selectedMode === "cloze_choice" ? "border-accent bg-accent-light/40" : "border-border bg-background-card hover:border-border-hover hover:bg-background-hover"}`}>
-          <div className="flex items-start justify-between gap-4"><div><p className="text-sm font-medium text-foreground-secondary">Сильный режим</p><h2 className="mt-1 text-xl font-semibold text-foreground">Пропуск в фразе</h2></div><MessageSquare className={`w-6 h-6 ${selectedMode === "cloze_choice" ? "text-accent" : "text-foreground-secondary"}`} /></div>
+        <button type="button" onClick={() => { if (!shouldSyncDailyReviews) { setSelectedMode("cloze_choice"); resetFlashcardSession(); } }} disabled={shouldSyncDailyReviews} className={`rounded-2xl border p-5 text-left transition-colors ${activeMode === "cloze_choice" ? "border-accent bg-accent-light/40" : "border-border bg-background-card"} ${shouldSyncDailyReviews ? "cursor-default" : "hover:border-border-hover hover:bg-background-hover"}`}>
+          <div className="flex items-start justify-between gap-4"><div><p className="text-sm font-medium text-foreground-secondary">Сильный режим</p><h2 className="mt-1 text-xl font-semibold text-foreground">Пропуск в фразе</h2></div><MessageSquare className={`w-6 h-6 ${activeMode === "cloze_choice" ? "text-accent" : "text-foreground-secondary"}`} /></div>
           <p className="mt-3 text-sm text-foreground-secondary">Если у карточки есть исходная фраза, слово скрывается в контексте. Если контекст не подходит, режим мягко переключается на RU → EN.</p>
-          <div className="mt-4 flex items-center gap-2"><Badge variant={selectedMode === "cloze_choice" ? "accent" : "default"}>{shouldSyncDailyReviews ? data.ratedSession.availableByMode.cloze_choice : "Контекст из новеллы"}</Badge><Badge variant="default">Fallback на RU → EN</Badge></div>
+          <div className="mt-4 flex items-center gap-2"><Badge variant={activeMode === "cloze_choice" ? "accent" : "default"}>{shouldSyncDailyReviews ? ratedAvailableByMode.cloze_choice : "Контекст из новеллы"}</Badge><Badge variant="default">{shouldSyncDailyReviews ? "Финальный шаг маршрута" : "Fallback на RU → EN"}</Badge></div>
         </button>
         <Card className="space-y-3">
           <div className="flex items-center gap-2"><Library className="w-5 h-5 text-accent" /><h2 className="text-lg font-semibold text-foreground">Фильтры</h2></div>
@@ -955,7 +970,7 @@ export default function LearningPage() {
             </div>
           </div>
         </Card>
-      ) : selectedMode === "pairs" ? (
+      ) : activeMode === "pairs" ? (
         <PairsTrainer
           key={`pairs-${sessionSource}-${practicePreset}-${filteredIdsKey}`}
           cards={activeCards}
@@ -1026,7 +1041,7 @@ export default function LearningPage() {
                         <p className="mt-1 text-lg font-semibold text-accent">{currentCard.ru}</p>
                       </div>
                     ) : null}
-                    {selectedMode === "cloze_choice" && effectiveMode === "ru_en_choice" ? (
+                    {activeMode === "cloze_choice" && effectiveMode === "ru_en_choice" ? (
                       <p className="text-sm text-foreground-muted">
                         Для этой карточки точный cloze не собрался, поэтому используется fallback на RU → EN.
                       </p>
