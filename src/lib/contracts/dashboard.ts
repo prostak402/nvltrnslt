@@ -1,4 +1,10 @@
-import type { PlanId, SupportCategory, TicketStatus, UserRole } from "@/lib/types";
+import type {
+  PlanId,
+  ReviewTaskType,
+  SupportCategory,
+  TicketStatus,
+  UserRole,
+} from "@/lib/types";
 
 export interface DashboardOverviewResponse {
   user: {
@@ -108,6 +114,60 @@ export interface DashboardSettingsResponse {
   poorConnection: "queue" | "retry" | "skip";
   reminderEnabled: boolean;
   emailNotifications: boolean;
+}
+
+export interface DashboardLearningCard {
+  id: number;
+  en: string;
+  ru: string;
+  context: string;
+  contextTranslation: string;
+  contextWordPosition: number | null;
+  kind: "word" | "phrase" | "sentence";
+  novel: string;
+  status: "new" | "hard" | "learned";
+  isActive: boolean;
+  isDue: boolean;
+  isMaintenance: boolean;
+  completedToday: boolean;
+  currentTaskType: ReviewTaskType | null;
+  completedTaskTypesToday: ReviewTaskType[];
+  learningStage: number;
+  masteryScore: number;
+  strongSuccessStreak: number;
+  todayPoints: number;
+  hasCloze: boolean;
+  clozeText: string | null;
+  clozeAnswer: string | null;
+}
+
+export interface DashboardRatedSessionResponse {
+  queueWords: DashboardLearningCard[];
+  availableByMode: {
+    pairs: number;
+    flashcards: number;
+    ru_en_choice: number;
+    cloze_choice: number;
+  };
+  sessionPoints: number;
+  completedWords: number;
+  remainingWords: number;
+  totalWords: number;
+  newCount: number;
+  hardCount: number;
+  maintenanceCount: number;
+}
+
+export interface DashboardLearningResponse {
+  ratedSession: DashboardRatedSessionResponse;
+  practicePool: DashboardLearningCard[];
+  novels: string[];
+  settings: {
+    dailyWords: number;
+    dailyNewWords: number;
+    prioritizeDifficult: boolean;
+    includePhrases: boolean;
+  };
 }
 
 export interface DashboardSupportTicketMessage {

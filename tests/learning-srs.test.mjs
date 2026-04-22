@@ -11,7 +11,9 @@ before(async () => {
 });
 
 after(async () => {
-  await app.close();
+  if (app) {
+    await app.close();
+  }
 });
 
 async function withSql(callback) {
@@ -27,11 +29,7 @@ async function withSql(callback) {
   }
 }
 
-async function registerAndActivateDevice({
-  name,
-  email,
-  password,
-}) {
+async function registerAndActivateDevice({ name, email, password }) {
   const client = app.createClient();
 
   const registerResponse = await client.request({
@@ -79,10 +77,10 @@ async function saveModItem(client, deviceToken, overrides = {}) {
     json: {
       kind: "word",
       text: "reluctant",
-      translation: "неохотный",
+      translation: "reluctant translation",
       note: "test note",
       contextOriginal: "He felt reluctant to continue.",
-      contextTranslation: "Он неохотно продолжил.",
+      contextTranslation: "Context translation",
       novelTitle: "SRS Novel",
       ...overrides,
     },
@@ -100,6 +98,8 @@ async function fetchStudyItem(itemId) {
         status,
         is_active,
         learning_stage,
+        mastery_score,
+        strong_success_streak,
         activated_at,
         last_answer_at,
         correct_streak,
@@ -122,6 +122,18 @@ async function updateStudyItemRow(itemId, values) {
       [...Object.values(values), itemId],
     );
   });
+}
+
+function ratedSession(data) {
+  return data?.ratedSession;
+}
+
+function queueWords(data) {
+  return ratedSession(data)?.queueWords ?? data?.cards ?? [];
+}
+
+function queueWordById(data, itemId) {
+  return queueWords(data).find((entry) => entry.id === itemId) ?? null;
 }
 
 test("daily queue activates only the configured number of new words", async () => {
@@ -150,7 +162,7 @@ test("daily queue activates only the configured number of new words", async () =
   for (let index = 0; index < 5; index += 1) {
     await saveModItem(client, deviceToken, {
       text: `queue-word-${index}`,
-      translation: `перевод ${index}`,
+      translation: `translation ${index}`,
     });
   }
 
@@ -171,8 +183,9 @@ test("daily queue activates only the configured number of new words", async () =
   });
 
   assert.equal(learningResponse.status, 200);
-  assert.equal(learningResponse.json?.data?.summary?.newCount, 2);
-  assert.equal(learningResponse.json?.data?.cards?.length, 2);
+  assert.equal(ratedSession(learningResponse.json?.data)?.newCount, 2);
+  assert.equal(queueWords(learningResponse.json?.data).length, 2);
+  assert.equal(ratedSession(learningResponse.json?.data)?.availableByMode?.pairs, 2);
 
   const afterLearning = await withSql(async (sql) => {
     const rows = await sql`
@@ -200,9 +213,9 @@ test("cloze uses stored context word position and keeps the real word form from 
 
   const itemId = await saveModItem(client, deviceToken, {
     text: "go",
-    translation: "идти",
+    translation: "to go",
     contextOriginal: "She went home before sunset.",
-    contextTranslation: "Она пошла домой до заката.",
+    contextTranslation: "She went home before sunset.",
     contextWordPosition: 2,
   });
 
@@ -211,7 +224,7 @@ test("cloze uses stored context word position and keeps the real word form from 
   });
 
   assert.equal(learningResponse.status, 200);
-  const card = learningResponse.json?.data?.cards?.find((entry) => entry.id === itemId);
+  const card = queueWordById(learningResponse.json?.data, itemId);
   assert.ok(card);
   assert.equal(card.hasCloze, true);
   assert.equal(card.contextWordPosition, 2);
@@ -219,7 +232,7 @@ test("cloze uses stored context word position and keeps the real word form from 
   assert.equal(card.clozeText, "She ______ home before sunset.");
 });
 
-test("flashcards know advances stage 0 to 1 with next-day review", async () => {
+test("stage 0 route moves from pairs to flashcards and then advances to stage 1", async () => {
   const { client, deviceToken } = await registerAndActivateDevice({
     name: "SRS Flashcards",
     email: "srs.flashcards@example.com",
@@ -228,17 +241,39 @@ test("flashcards know advances stage 0 to 1 with next-day review", async () => {
 
   const itemId = await saveModItem(client, deviceToken, {
     text: "flashcard-stage-zero",
-    translation: "карточка ноль",
+    translation: "flashcard stage zero",
   });
 
   const learningResponse = await client.request({
     path: "/api/dashboard/learning",
   });
   assert.equal(learningResponse.status, 200);
-  assert.equal(
-    learningResponse.json?.data?.cards?.some((card) => card.id === itemId),
-    true,
-  );
+  const initialCard = queueWordById(learningResponse.json?.data, itemId);
+  assert.ok(initialCard);
+  assert.equal(initialCard.currentTaskType, "pairs");
+
+  const pairsResponse = await client.request({
+    path: "/api/dashboard/review",
+    method: "POST",
+    json: {
+      itemId,
+      rating: "know",
+      taskType: "pairs",
+      sessionMode: "rated",
+    },
+  });
+
+  assert.equal(pairsResponse.status, 200);
+  assert.equal(pairsResponse.json?.data?.learningStage, 0);
+  assert.equal(pairsResponse.json?.data?.status, "new");
+
+  const learningAfterPairsResponse = await client.request({
+    path: "/api/dashboard/learning",
+  });
+  assert.equal(learningAfterPairsResponse.status, 200);
+  const flashcardsCard = queueWordById(learningAfterPairsResponse.json?.data, itemId);
+  assert.ok(flashcardsCard);
+  assert.equal(flashcardsCard.currentTaskType, "flashcards");
 
   const reviewResponse = await client.request({
     path: "/api/dashboard/review",
@@ -247,6 +282,7 @@ test("flashcards know advances stage 0 to 1 with next-day review", async () => {
       itemId,
       rating: "know",
       taskType: "flashcards",
+      sessionMode: "rated",
     },
   });
 
@@ -270,7 +306,7 @@ test("daily queue treats overstretched successful schedules as due by learning s
 
   const itemId = await saveModItem(client, deviceToken, {
     text: "stage-due-item",
-    translation: "этапное слово",
+    translation: "stage due item",
   });
 
   await updateStudyItemRow(itemId, {
@@ -282,6 +318,8 @@ test("daily queue treats overstretched successful schedules as due by learning s
     correct_streak: 2,
     wrong_count: 0,
     repetitions: 2,
+    mastery_score: 60,
+    strong_success_streak: 0,
     next_review_at: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000),
   });
 
@@ -290,10 +328,7 @@ test("daily queue treats overstretched successful schedules as due by learning s
   });
 
   assert.equal(learningResponse.status, 200);
-  assert.equal(
-    learningResponse.json?.data?.cards?.some((card) => card.id === itemId),
-    true,
-  );
+  assert.equal(queueWordById(learningResponse.json?.data, itemId) !== null, true);
 });
 
 test("unknown answer downgrades stage, while hard answer keeps current stage but marks difficult", async () => {
@@ -305,7 +340,7 @@ test("unknown answer downgrades stage, while hard answer keeps current stage but
 
   const itemId = await saveModItem(client, deviceToken, {
     text: "rating-item",
-    translation: "оценка",
+    translation: "rating item",
   });
 
   await updateStudyItemRow(itemId, {
@@ -313,6 +348,8 @@ test("unknown answer downgrades stage, while hard answer keeps current stage but
     is_active: true,
     learning_stage: 2,
     activated_at: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000),
+    mastery_score: 60,
+    strong_success_streak: 0,
     correct_streak: 2,
     wrong_count: 0,
     repetitions: 2,
@@ -325,7 +362,8 @@ test("unknown answer downgrades stage, while hard answer keeps current stage but
     json: {
       itemId,
       rating: "unknown",
-      taskType: "flashcards",
+      taskType: "ru_en_choice",
+      sessionMode: "rated",
     },
   });
 
@@ -338,6 +376,8 @@ test("unknown answer downgrades stage, while hard answer keeps current stage but
     is_active: true,
     learning_stage: 2,
     activated_at: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000),
+    mastery_score: 60,
+    strong_success_streak: 0,
     correct_streak: 2,
     wrong_count: 0,
     repetitions: 2,
@@ -350,7 +390,8 @@ test("unknown answer downgrades stage, while hard answer keeps current stage but
     json: {
       itemId,
       rating: "hard",
-      taskType: "flashcards",
+      taskType: "ru_en_choice",
+      sessionMode: "rated",
     },
   });
 
@@ -368,7 +409,9 @@ test("pairs cannot mark a word learned, but strong review modes can after seven 
 
   const itemId = await saveModItem(client, deviceToken, {
     text: "strong-item",
-    translation: "сильное слово",
+    translation: "strong item",
+    contextOriginal: "",
+    contextTranslation: "",
   });
 
   const oldActivationDate = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000);
@@ -377,6 +420,8 @@ test("pairs cannot mark a word learned, but strong review modes can after seven 
     status: "new",
     is_active: true,
     learning_stage: 3,
+    mastery_score: 74,
+    strong_success_streak: 1,
     activated_at: oldActivationDate,
     correct_streak: 3,
     wrong_count: 0,
@@ -391,16 +436,18 @@ test("pairs cannot mark a word learned, but strong review modes can after seven 
       itemId,
       rating: "know",
       taskType: "pairs",
+      sessionMode: "rated",
     },
   });
 
-  assert.equal(pairsResponse.status, 200);
-  assert.notEqual(pairsResponse.json?.data?.status, "learned");
+  assert.equal(pairsResponse.status, 400);
 
   await updateStudyItemRow(itemId, {
     status: "new",
     is_active: true,
     learning_stage: 3,
+    mastery_score: 74,
+    strong_success_streak: 1,
     activated_at: oldActivationDate,
     correct_streak: 3,
     wrong_count: 0,
@@ -415,6 +462,7 @@ test("pairs cannot mark a word learned, but strong review modes can after seven 
       itemId,
       rating: "know",
       taskType: "ru_en_choice",
+      sessionMode: "rated",
     },
   });
 
@@ -422,14 +470,9 @@ test("pairs cannot mark a word learned, but strong review modes can after seven 
   assert.equal(strongResponse.json?.data?.status, "learned");
   assert.equal(strongResponse.json?.data?.isActive, false);
 
-  const learningAfterLearnedResponse = await client.request({
-    path: "/api/dashboard/learning",
-  });
-  assert.equal(learningAfterLearnedResponse.status, 200);
-  assert.equal(
-    learningAfterLearnedResponse.json?.data?.cards?.some((card) => card.id === itemId),
-    false,
-  );
+  const itemAfterStrongReview = await fetchStudyItem(itemId);
+  assert.equal(itemAfterStrongReview.status, "learned");
+  assert.equal(itemAfterStrongReview.is_active, false);
 });
 
 test("cloze strong reviews can finish a due card after seven days", async () => {
@@ -441,15 +484,17 @@ test("cloze strong reviews can finish a due card after seven days", async () => 
 
   const itemId = await saveModItem(client, deviceToken, {
     text: "reluctant",
-    translation: "неохотный",
+    translation: "reluctant translation",
     contextOriginal: "I was reluctant to tell her the truth.",
-    contextTranslation: "Я неохотно решился сказать ей правду.",
+    contextTranslation: "Context translation",
   });
 
   await updateStudyItemRow(itemId, {
     status: "new",
     is_active: true,
     learning_stage: 3,
+    mastery_score: 72,
+    strong_success_streak: 1,
     activated_at: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000),
     correct_streak: 3,
     wrong_count: 0,
@@ -464,6 +509,7 @@ test("cloze strong reviews can finish a due card after seven days", async () => 
       itemId,
       rating: "know",
       taskType: "cloze_choice",
+      sessionMode: "rated",
     },
   });
 
@@ -480,13 +526,15 @@ test("existing word re-save keeps SRS fields and direct learned patch is rejecte
 
   const itemId = await saveModItem(client, deviceToken, {
     text: "preserve-item",
-    translation: "сохраняемое слово",
+    translation: "preserve item",
   });
 
   await updateStudyItemRow(itemId, {
     status: "hard",
     is_active: true,
     learning_stage: 2,
+    mastery_score: 61,
+    strong_success_streak: 0,
     activated_at: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000),
     correct_streak: 1,
     wrong_count: 3,
@@ -503,10 +551,10 @@ test("existing word re-save keeps SRS fields and direct learned patch is rejecte
     json: {
       kind: "word",
       text: "preserve-item",
-      translation: "сохраняемое слово (обновлено)",
+      translation: "preserve item updated",
       note: "updated note",
       contextOriginal: "Preserve the staged progress.",
-      contextTranslation: "Сохрани staged progress.",
+      contextTranslation: "Preserve the staged progress.",
       novelTitle: "SRS Novel",
     },
   });

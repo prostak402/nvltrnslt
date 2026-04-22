@@ -5,12 +5,17 @@ import { and, desc, eq } from "drizzle-orm";
 import {
   activateLearningItem,
   applyLearningReview,
+  buildRatedTaskState,
   buildLearningQueue,
   canBuildCloze,
+  isMaintenanceReviewDue,
   isLearningItemDue,
+  type RatedReviewEventLike,
 } from "@/lib/server/learning-domain";
 import { buildClozeData } from "@/lib/learning/cloze";
 import type {
+  DashboardLearningCard,
+  DashboardLearningResponse,
   DashboardHistoryResponse,
   DashboardOverviewResponse,
   DashboardProgressResponse,
@@ -29,6 +34,7 @@ import {
 import type {
   ReviewEventRecord,
   ReviewRating,
+  ReviewSessionMode,
   ReviewTaskType,
   StudyItemOccurrenceRecord,
   StudyItemRecord,
@@ -67,6 +73,13 @@ const DEFAULT_LEARNING_SETTINGS: UserSettingsRecord = {
   emailNotifications: true,
 };
 
+const MODE_ORDER: ReviewTaskType[] = [
+  "pairs",
+  "flashcards",
+  "ru_en_choice",
+  "cloze_choice",
+];
+
 function mapStudyItemRow(row: typeof studyItems.$inferSelect): StudyItemRecord {
   return {
     id: row.id,
@@ -79,8 +92,12 @@ function mapStudyItemRow(row: typeof studyItems.$inferSelect): StudyItemRecord {
     status: row.status as StudyStatus,
     isActive: row.isActive,
     learningStage: row.learningStage,
+    masteryScore: row.masteryScore,
+    strongSuccessStreak: row.strongSuccessStreak,
     activatedAt: toIsoString(row.activatedAt),
     lastAnswerAt: toIsoString(row.lastAnswerAt),
+    lastMasteredAt: toIsoString(row.lastMasteredAt),
+    maintenanceStage: row.maintenanceStage,
     correctStreak: row.correctStreak,
     wrongCount: row.wrongCount,
     repetitions: row.repetitions,
@@ -113,6 +130,7 @@ function mapReviewRow(row: typeof reviewEvents.$inferSelect): ReviewEventRecord 
     studyItemId: row.studyItemId,
     rating: row.rating as ReviewRating,
     taskType: row.taskType as ReviewTaskType | null,
+    sessionMode: row.sessionMode as ReviewSessionMode,
     beforeStatus: row.beforeStatus as StudyStatus,
     afterStatus: row.afterStatus as StudyStatus,
     reviewedAt: toIsoString(row.reviewedAt) ?? "",
@@ -122,7 +140,8 @@ function mapReviewRow(row: typeof reviewEvents.$inferSelect): ReviewEventRecord 
 function buildLearningCard(
   item: StudyItemRecord,
   latestByItemId: Map<number, StudyItemOccurrenceRecord>,
-) {
+  taskState?: ReturnType<typeof buildRatedTaskState>,
+): DashboardLearningCard {
   const latestOccurrence = latestByItemId.get(item.id);
   const context = latestOccurrence?.contextOriginal ?? "";
   const contextWordPosition = latestOccurrence?.contextWordPosition ?? null;
@@ -143,8 +162,15 @@ function buildLearningCard(
     novel: latestOccurrence?.novelTitle ?? "РќРµ СѓРєР°Р·Р°РЅРѕ",
     status: item.status,
     isActive: item.isActive,
-    isDue: isLearningItemDue(item, new Date()),
+    isDue: isLearningItemDue(item, new Date()) || isMaintenanceReviewDue(item, new Date()),
+    isMaintenance: item.status === "learned" && isMaintenanceReviewDue(item, new Date()),
+    completedToday: taskState?.completedToday ?? false,
+    currentTaskType: taskState?.currentTaskType ?? null,
+    completedTaskTypesToday: taskState?.completedTaskTypesToday ?? [],
     learningStage: item.learningStage,
+    masteryScore: item.masteryScore,
+    strongSuccessStreak: item.strongSuccessStreak,
+    todayPoints: taskState?.todayPoints ?? 0,
     hasCloze: canBuildCloze(item.text, context, contextWordPosition),
     clozeText: cloze.clozeText,
     clozeAnswer: cloze.clozeAnswer,
@@ -159,6 +185,59 @@ function latestOccurrenceMap(occurrences: StudyItemOccurrenceRecord[]) {
     }
   }
   return map;
+}
+
+function sortRatedSessionCards(left: DashboardLearningCard, right: DashboardLearningCard) {
+  if (left.completedToday !== right.completedToday) {
+    return left.completedToday ? 1 : -1;
+  }
+
+  const leftModeIndex = left.currentTaskType ? MODE_ORDER.indexOf(left.currentTaskType) : MODE_ORDER.length;
+  const rightModeIndex = right.currentTaskType ? MODE_ORDER.indexOf(right.currentTaskType) : MODE_ORDER.length;
+  if (leftModeIndex !== rightModeIndex) {
+    return leftModeIndex - rightModeIndex;
+  }
+
+  if (left.isMaintenance !== right.isMaintenance) {
+    return left.isMaintenance ? 1 : -1;
+  }
+
+  if (left.status !== right.status) {
+    if (left.status === "hard") return -1;
+    if (right.status === "hard") return 1;
+  }
+
+  if (left.kind !== right.kind) {
+    if (left.kind === "word") return -1;
+    if (right.kind === "word") return 1;
+  }
+
+  return left.en.localeCompare(right.en, "en");
+}
+
+function reviewsForToday(reviews: ReviewEventRecord[]) {
+  const todayKey = startOfDayKey();
+  return reviews.filter((review) => review.sessionMode === "rated" && review.reviewedAt.slice(0, 10) === todayKey);
+}
+
+function groupReviewsByItem(reviews: ReviewEventRecord[]) {
+  const byItem = new Map<number, RatedReviewEventLike[]>();
+  for (const review of reviews) {
+    const existing = byItem.get(review.studyItemId) ?? [];
+    existing.push({
+      studyItemId: review.studyItemId,
+      rating: review.rating,
+      taskType: review.taskType,
+      reviewedAt: review.reviewedAt,
+    });
+    byItem.set(review.studyItemId, existing);
+  }
+
+  for (const entry of byItem.values()) {
+    entry.sort((left, right) => left.reviewedAt.localeCompare(right.reviewedAt));
+  }
+
+  return byItem;
 }
 
 function buildStudyItemMeta(
@@ -180,15 +259,19 @@ function buildStudyItemMeta(
     status: item.status,
     isActive: item.isActive,
     learningStage: item.learningStage,
+    masteryScore: item.masteryScore,
+    strongSuccessStreak: item.strongSuccessStreak,
     activatedAt: item.activatedAt,
     lastAnswerAt: item.lastAnswerAt,
+    lastMasteredAt: item.lastMasteredAt,
+    maintenanceStage: item.maintenanceStage,
     wrongCount: item.wrongCount,
     note: item.note,
     repetitions: item.repetitions,
     kind: item.kind,
     nextReviewAt: item.nextReviewAt,
     isDue:
-      isLearningItemDue(item, new Date()),
+      isLearningItemDue(item, new Date()) || isMaintenanceReviewDue(item, new Date()),
   };
 }
 
@@ -259,8 +342,8 @@ export async function getDashboardOverview(
   const todayKey = startOfDayKey();
   const dueItems = items.filter(
     (entry) =>
-      entry.isActive &&
-      isLearningItemDue(entry, new Date()),
+      (entry.isActive || entry.status === "learned") &&
+      (isLearningItemDue(entry, new Date()) || isMaintenanceReviewDue(entry, new Date())),
   ).length;
 
   const recentWords = words
@@ -411,7 +494,24 @@ export async function updateStudyItem(
         status: statusForUpdate,
         isActive: nextIsActive,
         learningStage: nextLearningStage,
+        masteryScore:
+          patch.status === "hard"
+            ? Math.min(existingItem.masteryScore, 60)
+            : activationPatch?.masteryScore ?? existingItem.masteryScore,
+        strongSuccessStreak:
+          patch.status === "hard"
+            ? 0
+            : activationPatch?.strongSuccessStreak ?? existingItem.strongSuccessStreak,
         activatedAt: nextActivatedAt,
+        lastAnswerAt:
+          activationPatch?.lastAnswerAt !== undefined
+            ? (activationPatch.lastAnswerAt ? new Date(activationPatch.lastAnswerAt) : null)
+            : existingItem.lastAnswerAt,
+        lastMasteredAt: existingItem.lastMasteredAt,
+        maintenanceStage:
+          patch.status === "hard"
+            ? 0
+            : activationPatch?.maintenanceStage ?? existingItem.maintenanceStage,
         nextReviewAt,
         updatedAt: new Date(),
       })
@@ -457,10 +557,11 @@ export async function deleteStudyItem(userId: number, itemId: number) {
 
 export async function getLearningPageData(userId: number) {
   return getDb().transaction(async (tx) => {
-    const [settings, itemRows, occurrenceRows] = await Promise.all([
+    const [settings, itemRows, occurrenceRows, reviewRows] = await Promise.all([
       findSettings(tx, userId),
       tx.select().from(studyItems).where(eq(studyItems.userId, userId)),
       tx.select().from(studyItemOccurrences).where(eq(studyItemOccurrences.userId, userId)),
+      tx.select().from(reviewEvents).where(eq(reviewEvents.userId, userId)),
     ]);
 
     const resolvedSettings = settings
@@ -490,7 +591,12 @@ export async function getLearningPageData(userId: number) {
         .set({
           isActive: activation.isActive,
           learningStage: activation.learningStage,
+          masteryScore: activation.masteryScore,
+          strongSuccessStreak: activation.strongSuccessStreak,
           activatedAt: activation.activatedAt ? new Date(activation.activatedAt) : null,
+          lastAnswerAt: activation.lastAnswerAt ? new Date(activation.lastAnswerAt) : null,
+          lastMasteredAt: activation.lastMasteredAt ? new Date(activation.lastMasteredAt) : null,
+          maintenanceStage: activation.maintenanceStage,
           correctStreak: activation.correctStreak,
           wrongCount: activation.wrongCount,
           nextReviewAt: new Date(activation.nextReviewAt),
@@ -499,72 +605,114 @@ export async function getLearningPageData(userId: number) {
         .where(eq(studyItems.id, item.id));
     }
 
-    const queueItems = queue.queueItems.map((item) => {
+    const updatedItems = allItems.map((item) => {
       const patch = activatedPatches.get(item.id);
       return patch ? { ...item, ...patch } : item;
     });
-
-    const cards = queueItems.map((item) => {
-      const latestOccurrence = latestByItemId.get(item.id);
-      const context = latestOccurrence?.contextOriginal ?? "";
-      const contextWordPosition = latestOccurrence?.contextWordPosition ?? null;
-      const cloze = buildClozeData({
-        context,
-        answer: item.text,
-        contextWordPosition,
-      });
-      return {
-        id: item.id,
-        en: item.text,
-        ru: item.translation,
-        context,
-        contextTranslation: latestOccurrence?.contextTranslation ?? "",
-        contextWordPosition,
-        kind: item.kind,
-        novel: latestOccurrence?.novelTitle ?? "Не указано",
-        status: item.status,
-        isActive: item.isActive,
-        isDue: isLearningItemDue(item, new Date()),
-        learningStage: item.learningStage,
-        hasCloze: canBuildCloze(item.text, context, contextWordPosition),
-        clozeText: cloze.clozeText,
-        clozeAnswer: cloze.clozeAnswer,
-      };
-    });
-    const practicePool = allItems
+    const updatedItemsById = new Map(updatedItems.map((item) => [item.id, item]));
+    const todayRatedReviews = reviewsForToday(reviewRows.map(mapReviewRow));
+    const reviewsByItem = groupReviewsByItem(todayRatedReviews);
+    const sessionItemIds = new Set<number>([
+      ...queue.queueItems.map((item) => item.id),
+      ...todayRatedReviews.map((review) => review.studyItemId),
+    ]);
+    const queueWords = Array.from(sessionItemIds)
+      .map((itemId) => updatedItemsById.get(itemId))
+      .filter((item): item is NonNullable<typeof item> => Boolean(item))
+      .map((item) =>
+        buildLearningCard(
+          item,
+          latestByItemId,
+          buildRatedTaskState({
+            item,
+            eventsToday: reviewsByItem.get(item.id) ?? [],
+            hasContext: item.hasContext,
+            now: activationNow,
+          }),
+        ),
+      )
+      .sort(sortRatedSessionCards);
+    const practicePool = updatedItems
       .slice()
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-      .map((item) => {
-        const patch = activatedPatches.get(item.id);
-        return buildLearningCard(patch ? { ...item, ...patch } : item, latestByItemId);
-      });
+      .map((item) => buildLearningCard(item, latestByItemId));
+    const availableByMode = {
+      pairs: queueWords.filter((card) => !card.completedToday && card.currentTaskType === "pairs").length,
+      flashcards: queueWords.filter((card) => !card.completedToday && card.currentTaskType === "flashcards").length,
+      ru_en_choice: queueWords.filter((card) => !card.completedToday && card.currentTaskType === "ru_en_choice").length,
+      cloze_choice: queueWords.filter((card) => !card.completedToday && card.currentTaskType === "cloze_choice").length,
+    };
+    const completedWords = queueWords.filter((card) => card.completedToday).length;
+    const sessionPoints = queueWords.reduce((sum, card) => sum + card.todayPoints, 0);
 
-    return {
-      cards,
+    const response: DashboardLearningResponse & {
+      cards: DashboardLearningCard[];
+      summary: {
+        dueCount: number;
+        hardDueCount: number;
+        newCount: number;
+        totalCount: number;
+        maintenanceCount: number;
+        sessionPoints: number;
+        completedWords: number;
+        remainingWords: number;
+      };
+      categories: Array<{ label: string; count: number }>;
+    } = {
+      ratedSession: {
+        queueWords,
+        availableByMode,
+        sessionPoints,
+        completedWords,
+        remainingWords: Math.max(queueWords.length - completedWords, 0),
+        totalWords: queueWords.length,
+        newCount: queueWords.filter((card) => !card.isMaintenance && card.status === "new").length,
+        hardCount: queueWords.filter((card) => card.status === "hard").length,
+        maintenanceCount: queueWords.filter((card) => card.isMaintenance).length,
+      },
       practicePool,
+      novels: ["Все новеллы", ...new Set(practicePool.map((card) => card.novel))],
+      settings: resolvedSettings,
+      cards: queueWords,
       summary: {
         dueCount: queue.dueCount,
         hardDueCount: queue.hardDueCount,
         newCount: queue.newCount,
-        totalCount: cards.length,
+        totalCount: queueWords.length,
+        maintenanceCount: queue.maintenanceCount,
+        sessionPoints,
+        completedWords,
+        remainingWords: Math.max(queueWords.length - completedWords, 0),
       },
       categories: [
-        { label: "Новые слова", count: cards.filter((entry) => entry.kind === "word" && entry.status === "new").length },
-        { label: "Сложные слова", count: cards.filter((entry) => entry.kind === "word" && entry.status === "hard").length },
-        { label: "Фразы", count: cards.filter((entry) => entry.kind === "phrase").length },
-        { label: "Случайная подборка", count: cards.length },
+        {
+          label: "Новые слова",
+          count: queueWords.filter((entry) => entry.kind === "word" && !entry.isMaintenance && entry.status === "new").length,
+        },
+        {
+          label: "Сложные слова",
+          count: queueWords.filter((entry) => entry.kind === "word" && entry.status === "hard").length,
+        },
+        {
+          label: "Фразы",
+          count: queueWords.filter((entry) => entry.kind === "phrase").length,
+        },
+        {
+          label: "Случайная подборка",
+          count: queueWords.length,
+        },
       ],
-      novels: ["Все новеллы", ...new Set(cards.map((card) => card.novel))],
-      settings: resolvedSettings,
     };
+
+    return response;
   });
 }
-
 export async function recordReview(
   userId: number,
   itemId: number,
   rating: ReviewRating,
   taskType: ReviewTaskType,
+  sessionMode: ReviewSessionMode,
 ) {
   return getDb().transaction(async (tx) => {
     const [item] = await tx
@@ -577,11 +725,41 @@ export async function recordReview(
       throw new Error("ITEM_NOT_FOUND");
     }
 
+    if (sessionMode === "practice") {
+      return {
+        ...mapStudyItemRow(item),
+        sessionMode,
+        sessionPoints: 0,
+      };
+    }
+
     const currentIso = nowIso();
+    const [latestOccurrence, priorReviewRows] = await Promise.all([
+      tx
+        .select()
+        .from(studyItemOccurrences)
+        .where(and(eq(studyItemOccurrences.studyItemId, itemId), eq(studyItemOccurrences.userId, userId)))
+        .orderBy(desc(studyItemOccurrences.createdAt))
+        .limit(1)
+        .then((rows) => rows[0] ?? null),
+      tx
+        .select()
+        .from(reviewEvents)
+        .where(and(eq(reviewEvents.userId, userId), eq(reviewEvents.studyItemId, itemId)))
+        .orderBy(desc(reviewEvents.reviewedAt)),
+    ]);
+    const priorRatedEventsToday = reviewsForToday(priorReviewRows.map(mapReviewRow)).map((review) => ({
+      studyItemId: review.studyItemId,
+      rating: review.rating,
+      taskType: review.taskType,
+      reviewedAt: review.reviewedAt,
+    }));
     const update = applyLearningReview({
       item: mapStudyItemRow(item),
       rating,
       taskType,
+      priorRatedEventsToday,
+      hasContext: Boolean((latestOccurrence?.contextOriginal ?? "").trim()),
       now: new Date(currentIso),
     });
 
@@ -591,8 +769,12 @@ export async function recordReview(
         status: update.status,
         isActive: update.isActive,
         learningStage: update.learningStage,
+        masteryScore: update.masteryScore,
+        strongSuccessStreak: update.strongSuccessStreak,
         activatedAt: update.activatedAt ? new Date(update.activatedAt) : null,
         lastAnswerAt: new Date(update.lastAnswerAt),
+        lastMasteredAt: update.lastMasteredAt ? new Date(update.lastMasteredAt) : null,
+        maintenanceStage: update.maintenanceStage,
         correctStreak: update.correctStreak,
         wrongCount: update.wrongCount,
         repetitions: update.repetitions,
@@ -607,6 +789,7 @@ export async function recordReview(
       studyItemId: itemId,
       rating,
       taskType,
+      sessionMode,
       beforeStatus: item.status,
       afterStatus: update.status,
       reviewedAt: new Date(currentIso),
@@ -615,15 +798,18 @@ export async function recordReview(
     await logActivity(tx, {
       userId,
       type: "review",
-      action: "Повторение",
-      detail: `${item.text} → ${rating}`,
+      action: "Рейтинг-повторение",
+      detail: item.text + " -> " + rating + " (" + taskType + ")",
       level: rating === "know" ? "success" : rating === "hard" ? "warning" : "info",
     });
 
-    return mapStudyItemRow(updatedItem);
+    return {
+      ...mapStudyItemRow(updatedItem),
+      sessionMode,
+      sessionPoints: update.sessionPoints,
+    };
   });
 }
-
 export async function getProgressPageData(
   userId: number,
 ): Promise<DashboardProgressResponse> {
@@ -654,7 +840,7 @@ export async function getProgressPageData(
   });
 
   const dueItems = items.filter(
-    (entry) => isLearningItemDue(entry, new Date()),
+    (entry) => isLearningItemDue(entry, new Date()) || isMaintenanceReviewDue(entry, new Date()),
   ).length;
   const recentReviewScores = reviews
     .slice(0, 10)

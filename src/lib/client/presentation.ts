@@ -3,7 +3,7 @@ import type { PlanId } from "@/lib/types";
 
 export const studyStatusMeta = {
   new: { label: "Новое", variant: "accent" as const },
-  hard: { label: "Сложное", variant: "warning" as const },
+  hard: { label: "Трудное", variant: "warning" as const },
   learned: { label: "Выучено", variant: "success" as const },
 };
 
@@ -39,9 +39,13 @@ export const supportCategoryLabels = {
   other: "Другое",
 };
 
-export function studyQueueMeta(item: { status: "new" | "hard" | "learned"; isActive: boolean; isDue: boolean }) {
+export function studyQueueMeta(item: {
+  status: "new" | "hard" | "learned";
+  isActive: boolean;
+  isDue: boolean;
+}) {
   if (item.status === "learned") {
-    return { label: "Изучено", variant: "success" as const };
+    return { label: "Выучено", variant: "success" as const };
   }
 
   if (item.isDue) {
@@ -49,7 +53,7 @@ export function studyQueueMeta(item: { status: "new" | "hard" | "learned"; isAct
   }
 
   if (item.isActive) {
-    return { label: "В изучении", variant: "accent" as const };
+    return { label: "В обучении", variant: "accent" as const };
   }
 
   return { label: "Добавлено в словарь", variant: "default" as const };

@@ -5,6 +5,7 @@ import { z } from "zod";
 import {
   COMPATIBILITY_STATUSES,
   REVIEW_RATINGS,
+  REVIEW_SESSION_MODES,
   REVIEW_TASK_TYPES,
   STUDY_KINDS,
   STUDY_STATUSES,
@@ -58,6 +59,7 @@ export const reviewBodySchema = z.object({
   itemId: positiveInt,
   rating: z.enum(REVIEW_RATINGS),
   taskType: z.enum(REVIEW_TASK_TYPES),
+  sessionMode: z.enum(REVIEW_SESSION_MODES).default("rated"),
 });
 
 export const dashboardSettingsBodySchema = z.object({

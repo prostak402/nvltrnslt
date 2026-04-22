@@ -79,6 +79,7 @@ export const REVIEW_TASK_TYPES = [
   "ru_en_choice",
   "cloze_choice",
 ] as const;
+export const REVIEW_SESSION_MODES = ["rated", "practice"] as const;
 export const SUPPORT_CATEGORIES = [
   "mod",
   "sync",
@@ -120,6 +121,12 @@ export const REVIEW_INTERVALS = {
   hardDays: 1,
   knowDays: [3, 7, 14],
   learnedThreshold: 3,
+} as const;
+export const LEARNING_DEFAULTS = {
+  activePoolCap: 30,
+  learnedMaintenanceCap: 2,
+  learnedMaintenanceShare: 0.15,
+  maintenanceIntervalsDays: [7, 21, 45, 90],
 } as const;
 export const DEFAULT_TRANSLATION_TIMEOUT_MS = 8000;
 export const DEFAULT_TRANSLATION_MAX_RETRIES = 2;

@@ -41,7 +41,9 @@ before(async () => {
 });
 
 after(async () => {
-  await app.close();
+  if (app) {
+    await app.close();
+  }
 });
 
 test("critical HTTP path covers auth, mod flow, review, support, and admin auth", async () => {
@@ -182,6 +184,30 @@ test("critical HTTP path covers auth, mod flow, review, support, and admin auth"
     true,
   );
 
+  const learningResponse = await user.request({
+    path: "/api/dashboard/learning",
+  });
+  assert.equal(learningResponse.status, 200);
+  assert.equal(
+    learningResponse.json?.data?.ratedSession?.queueWords?.some(
+      (card) => card.id === itemId && card.currentTaskType === "pairs",
+    ) ?? learningResponse.json?.data?.cards?.some((card) => card.id === itemId),
+    true,
+  );
+
+  const pairsReviewResponse = await user.request({
+    path: "/api/dashboard/review",
+    method: "POST",
+    json: {
+      itemId,
+      rating: "know",
+      taskType: "pairs",
+      sessionMode: "rated",
+    },
+  });
+
+  assert.equal(pairsReviewResponse.status, 200);
+
   const reviewResponse = await user.request({
     path: "/api/dashboard/review",
     method: "POST",
@@ -189,13 +215,14 @@ test("critical HTTP path covers auth, mod flow, review, support, and admin auth"
       itemId,
       rating: "know",
       taskType: "flashcards",
+      sessionMode: "rated",
     },
   });
 
   assert.equal(reviewResponse.status, 200);
   assert.equal(reviewResponse.json?.data?.id, itemId);
   assert.equal(reviewResponse.json?.data?.correctStreak, 1);
-  assert.equal(reviewResponse.json?.data?.repetitions, 1);
+  assert.equal(reviewResponse.json?.data?.repetitions, 2);
 
   const supportTicketResponse = await user.request({
     path: "/api/dashboard/support",

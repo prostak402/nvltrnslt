@@ -4,6 +4,7 @@ import type {
   COMPATIBILITY_STATUSES,
   PLAN_ORDER,
   REVIEW_RATINGS,
+  REVIEW_SESSION_MODES,
   REVIEW_TASK_TYPES,
   STUDY_KINDS,
   STUDY_STATUSES,
@@ -16,6 +17,7 @@ export type StudyKind = (typeof STUDY_KINDS)[number];
 export type StudyStatus = (typeof STUDY_STATUSES)[number];
 export type ReviewRating = (typeof REVIEW_RATINGS)[number];
 export type ReviewTaskType = (typeof REVIEW_TASK_TYPES)[number];
+export type ReviewSessionMode = (typeof REVIEW_SESSION_MODES)[number];
 export type SupportCategory = (typeof SUPPORT_CATEGORIES)[number];
 export type TicketStatus = (typeof TICKET_STATUSES)[number];
 export type CompatibilityStatus = (typeof COMPATIBILITY_STATUSES)[number];
@@ -101,8 +103,12 @@ export interface StudyItemRecord {
   status: StudyStatus;
   isActive: boolean;
   learningStage: number;
+  masteryScore: number;
+  strongSuccessStreak: number;
   activatedAt: string | null;
   lastAnswerAt: string | null;
+  lastMasteredAt: string | null;
+  maintenanceStage: number;
   correctStreak: number;
   wrongCount: number;
   repetitions: number;
@@ -131,6 +137,7 @@ export interface ReviewEventRecord {
   studyItemId: number;
   rating: ReviewRating;
   taskType: ReviewTaskType | null;
+  sessionMode: ReviewSessionMode;
   beforeStatus: StudyStatus;
   afterStatus: StudyStatus;
   reviewedAt: string;
