@@ -15,9 +15,9 @@ const LEARNED_STAGE = 4;
 const DEFAULT_DAILY_NEW_WORDS = 10;
 
 const STAGE_MASTERY_THRESHOLDS = {
-  0: 25,
-  1: 50,
-  2: 75,
+  0: 15,
+  1: 40,
+  2: 70,
   3: 90,
 } as const;
 
