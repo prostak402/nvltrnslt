@@ -7,6 +7,7 @@ import {
   applyLearningReview,
   buildLearningQueue,
   canBuildCloze,
+  isLearningItemDue,
 } from "@/lib/server/learning-domain";
 import { buildClozeData } from "@/lib/learning/cloze";
 import type {
@@ -39,7 +40,6 @@ import {
   formatDateRu,
   formatDateTimeRu,
   formatRelativeDateRu,
-  hasReachedReviewDay,
   nowIso,
   startOfDayKey,
 } from "@/lib/server/utils";
@@ -143,7 +143,7 @@ function buildLearningCard(
     novel: latestOccurrence?.novelTitle ?? "РќРµ СѓРєР°Р·Р°РЅРѕ",
     status: item.status,
     isActive: item.isActive,
-    isDue: item.isActive && item.status !== "learned" && hasReachedReviewDay(item.nextReviewAt),
+    isDue: isLearningItemDue(item, new Date()),
     learningStage: item.learningStage,
     hasCloze: canBuildCloze(item.text, context, contextWordPosition),
     clozeText: cloze.clozeText,
@@ -188,9 +188,7 @@ function buildStudyItemMeta(
     kind: item.kind,
     nextReviewAt: item.nextReviewAt,
     isDue:
-      item.isActive &&
-      item.status !== "learned" &&
-      hasReachedReviewDay(item.nextReviewAt),
+      isLearningItemDue(item, new Date()),
   };
 }
 
@@ -262,8 +260,7 @@ export async function getDashboardOverview(
   const dueItems = items.filter(
     (entry) =>
       entry.isActive &&
-      entry.status !== "learned" &&
-      hasReachedReviewDay(entry.nextReviewAt),
+      isLearningItemDue(entry, new Date()),
   ).length;
 
   const recentWords = words
@@ -527,7 +524,7 @@ export async function getLearningPageData(userId: number) {
         novel: latestOccurrence?.novelTitle ?? "Не указано",
         status: item.status,
         isActive: item.isActive,
-        isDue: item.isActive && item.status !== "learned" && hasReachedReviewDay(item.nextReviewAt),
+        isDue: isLearningItemDue(item, new Date()),
         learningStage: item.learningStage,
         hasCloze: canBuildCloze(item.text, context, contextWordPosition),
         clozeText: cloze.clozeText,
@@ -657,10 +654,7 @@ export async function getProgressPageData(
   });
 
   const dueItems = items.filter(
-    (entry) =>
-      entry.isActive &&
-      entry.status !== "learned" &&
-      hasReachedReviewDay(entry.nextReviewAt),
+    (entry) => isLearningItemDue(entry, new Date()),
   ).length;
   const recentReviewScores = reviews
     .slice(0, 10)

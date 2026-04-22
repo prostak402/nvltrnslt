@@ -261,6 +261,41 @@ test("flashcards know advances stage 0 to 1 with next-day review", async () => {
   assert.equal(nextReviewAt < now + 28 * 60 * 60 * 1000, true);
 });
 
+test("daily queue treats overstretched successful schedules as due by learning stage", async () => {
+  const { client, deviceToken } = await registerAndActivateDevice({
+    name: "SRS Stage Due",
+    email: "srs.stage.due@example.com",
+    password: "stage-due-password-123",
+  });
+
+  const itemId = await saveModItem(client, deviceToken, {
+    text: "stage-due-item",
+    translation: "этапное слово",
+  });
+
+  await updateStudyItemRow(itemId, {
+    status: "new",
+    is_active: true,
+    learning_stage: 2,
+    activated_at: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000),
+    last_answer_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
+    correct_streak: 2,
+    wrong_count: 0,
+    repetitions: 2,
+    next_review_at: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000),
+  });
+
+  const learningResponse = await client.request({
+    path: "/api/dashboard/learning",
+  });
+
+  assert.equal(learningResponse.status, 200);
+  assert.equal(
+    learningResponse.json?.data?.cards?.some((card) => card.id === itemId),
+    true,
+  );
+});
+
 test("unknown answer downgrades stage, while hard answer keeps current stage but marks difficult", async () => {
   const { client, deviceToken } = await registerAndActivateDevice({
     name: "SRS Ratings",

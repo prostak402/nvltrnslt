@@ -52,24 +52,55 @@ function isSameDay(leftIso: string | null, right: Date) {
   return left.toISOString().slice(0, 10) === right.toISOString().slice(0, 10);
 }
 
-function isDue(item: LearningQueueCandidate, now: Date) {
+function stageIntervalDays(stage: number) {
+  if (stage <= 1) {
+    return 1;
+  }
+
+  if (stage === 2) {
+    return 2;
+  }
+
+  return 4;
+}
+
+export function resolveEffectiveNextReviewAt(
+  item: Pick<
+    StudyItemRecord,
+    "learningStage" | "lastAnswerAt" | "activatedAt" | "nextReviewAt" | "status" | "isActive"
+  >,
+) {
+  if (!item.isActive || item.status === "learned" || item.learningStage <= 0) {
+    return item.nextReviewAt;
+  }
+
+  const anchor = item.lastAnswerAt ?? item.activatedAt;
+  if (!anchor) {
+    return item.nextReviewAt;
+  }
+
+  const expectedReviewAt = addDays(anchor, stageIntervalDays(item.learningStage));
+  return new Date(expectedReviewAt).getTime() < new Date(item.nextReviewAt).getTime()
+    ? expectedReviewAt
+    : item.nextReviewAt;
+}
+
+export function isLearningItemDue(
+  item: Pick<
+    StudyItemRecord,
+    "learningStage" | "lastAnswerAt" | "activatedAt" | "nextReviewAt" | "status" | "isActive"
+  >,
+  now: Date,
+) {
   if (!item.isActive || item.status === "learned") {
     return false;
   }
 
-  return hasReachedReviewDay(item.nextReviewAt, now);
+  return hasReachedReviewDay(resolveEffectiveNextReviewAt(item), now);
 }
 
 function nextStageDueAt(stage: number, nowIso: string) {
-  if (stage <= 0) {
-    return addDays(nowIso, 1);
-  }
-
-  if (stage === 1) {
-    return addDays(nowIso, 2);
-  }
-
-  return addDays(nowIso, 4);
+  return addDays(nowIso, stageIntervalDays(stage));
 }
 
 function sortDueItems(
@@ -82,7 +113,9 @@ function sortDueItems(
     if (right.status === "hard") return 1;
   }
 
-  const byDue = new Date(left.nextReviewAt).getTime() - new Date(right.nextReviewAt).getTime();
+  const byDue =
+    new Date(resolveEffectiveNextReviewAt(left)).getTime() -
+    new Date(resolveEffectiveNextReviewAt(right)).getTime();
   if (byDue !== 0) {
     return byDue;
   }
@@ -118,7 +151,7 @@ export function buildLearningQueue(
   const now = nowInput instanceof Date ? nowInput : new Date(nowInput);
   const dueItems = items
     .filter((item) => (settings.includePhrases ? true : item.kind !== "phrase"))
-    .filter((item) => isDue(item, now))
+    .filter((item) => isLearningItemDue(item, now))
     .sort((left, right) => sortDueItems(left, right, settings.prioritizeDifficult));
 
   const activatedTodayCount = items.filter((item) => isSameDay(item.activatedAt, now)).length;
