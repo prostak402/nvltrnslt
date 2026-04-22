@@ -45,6 +45,8 @@ export interface UserRecord {
   activationKey: string;
   role: UserRole;
   plan: PlanId;
+  translationLimitOverride: number | null;
+  dictionaryLimitOverride: number | null;
   status: "active" | "banned" | "inactive";
   registeredAt: string;
   lastActiveAt: string;

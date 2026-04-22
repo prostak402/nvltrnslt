@@ -53,7 +53,7 @@ import {
 import {
   findSettings,
   findUserById,
-  getPlanLimit,
+  getUserTranslationLimit,
   getUsageRecord,
   logActivity,
   omitPassword,
@@ -312,7 +312,7 @@ export async function getDashboardShellSummary(
 
   return {
     translationsUsed: usage.count,
-    translationsLimit: getPlanLimit(user.plan, adminSettings),
+    translationsLimit: getUserTranslationLimit(user, adminSettings),
   };
 }
 
@@ -381,7 +381,7 @@ export async function getDashboardOverview(
       hardCount: items.filter((entry) => entry.status === "hard").length,
       dueCount: dueItems,
       translationsToday: usage?.count ?? 0,
-      translationsLimit: getPlanLimit(user.plan, adminSettings),
+      translationsLimit: getUserTranslationLimit(user, adminSettings),
       savesToday: items.filter((entry) => entry.createdAt.slice(0, 10) === todayKey).length,
       reviewsToday: reviews.filter((entry) => entry.reviewedAt.slice(0, 10) === todayKey).length,
     },

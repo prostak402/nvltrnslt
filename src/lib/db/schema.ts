@@ -18,6 +18,8 @@ export const users = pgTable("users", {
   activationKey: varchar("activation_key", { length: 64 }).notNull().unique(),
   role: varchar("role", { length: 20 }).notNull().default("user"),
   plan: varchar("plan", { length: 20 }).notNull().default("free"),
+  translationLimitOverride: integer("translation_limit_override"),
+  dictionaryLimitOverride: integer("dictionary_limit_override"),
   status: varchar("status", { length: 20 }).notNull().default("active"),
   registeredAt: timestamp("registered_at", { withTimezone: true }).notNull(),
   lastActiveAt: timestamp("last_active_at", { withTimezone: true }).notNull(),

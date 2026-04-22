@@ -125,6 +125,9 @@ export interface AdminUserRow {
   phrasesCount: number;
   translationsToday: number;
   translationLimit: number | null;
+  translationLimitOverride: number | null;
+  dictionaryLimit: number | null;
+  dictionaryLimitOverride: number | null;
   devicesCount: number;
   totalTranslations: number;
   activationKeyPreview: string;

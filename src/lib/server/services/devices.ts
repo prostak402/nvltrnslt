@@ -35,8 +35,8 @@ import {
   findSettings,
   findUserByActivationKey,
   findUserById,
-  getDictionaryLimit,
-  getPlanLimit,
+  getUserDictionaryLimit,
+  getUserTranslationLimit,
   getUsageRecord,
   incrementUsageOrThrow,
   logActivity,
@@ -135,7 +135,7 @@ async function buildLinkedDevicePayload(
     features: PLANS[userRow.plan].features,
     plan: userRow.plan,
     quotas: {
-      dailyTranslations: getPlanLimit(userRow.plan, adminSettings),
+      dailyTranslations: getUserTranslationLimit(userRow, adminSettings),
     },
   };
 }
@@ -242,13 +242,15 @@ function buildTranslationResponse(params: {
 
 async function assertTranslationQuotaAvailable(
   executor: DbExecutor,
-  userId: number,
-  plan: Parameters<typeof getPlanLimit>[0],
+  user: Awaited<ReturnType<typeof findUserById>>,
   requestedUnits: number,
 ) {
+  if (!user) {
+    throw new Error("USER_NOT_FOUND");
+  }
   const adminSettings = await getAdminSettingsRecord(executor);
-  const usage = await getUsageRecord(executor, userId);
-  const limit = getPlanLimit(plan, adminSettings);
+  const usage = await getUsageRecord(executor, user.id);
+  const limit = getUserTranslationLimit(user, adminSettings);
 
   if (limit !== null && usage.count + requestedUnits > limit) {
     throw new Error("TRANSLATION_LIMIT_REACHED");
@@ -523,14 +525,14 @@ export async function getDeviceBootstrap(deviceToken: string) {
       },
       user: omitPassword(userRow),
       settings: await findSettings(tx, userRow.id),
-      plan: userRow.plan,
-      features: PLANS[userRow.plan].features,
-      usage: {
-        dayKey: usageRow.dayKey,
-        count: usageRow.count,
-        limit: getPlanLimit(userRow.plan, adminSettings),
-      },
-    };
+        plan: userRow.plan,
+        features: PLANS[userRow.plan].features,
+        usage: {
+          dayKey: usageRow.dayKey,
+          count: usageRow.count,
+          limit: getUserTranslationLimit(userRow, adminSettings),
+        },
+      };
   });
 }
 
@@ -554,7 +556,7 @@ export async function translateForDevice(params: {
     }
 
     const usageRow = await getUsageRecord(tx, userRow.id);
-    const limit = getPlanLimit(userRow.plan, adminSettings);
+    const limit = getUserTranslationLimit(userRow, adminSettings);
     const now = nowIso();
 
     await touchDevice(tx, deviceRow.id, now);
@@ -598,8 +600,7 @@ export async function translateForDevice(params: {
       const { userRow } = await getActiveDeviceContext(tx, deviceToken);
       await assertTranslationQuotaAvailable(
         tx,
-        userRow.id,
-        userRow.plan,
+        userRow,
         translationUnits,
       );
     });
@@ -610,7 +611,7 @@ export async function translateForDevice(params: {
   return getDb().transaction(async (tx) => {
     const { deviceRow, userRow } = await getActiveDeviceContext(tx, deviceToken);
     const adminSettings = await getAdminSettingsRecord(tx);
-    const limit = getPlanLimit(userRow.plan, adminSettings);
+    const limit = getUserTranslationLimit(userRow, adminSettings);
     const cacheRow = await findCachedTranslation(tx, normalizedText);
 
     if (cacheRow && !isStaleCachedTranslation(cacheRow.translatedText)) {
@@ -737,7 +738,7 @@ export async function saveDeviceStudyItem(params: {
   return getDb().transaction(async (tx) => {
     const { deviceRow, userRow } = await getActiveDeviceContext(tx, deviceToken);
     const adminSettings = await getAdminSettingsRecord(tx);
-    const dictionaryLimit = getDictionaryLimit(userRow.plan, adminSettings);
+    const dictionaryLimit = getUserDictionaryLimit(userRow, adminSettings);
     const normalizedText =
       kind === "word" ? normalizeWord(text) : normalizeStudyText(text);
     const now = nowIso();

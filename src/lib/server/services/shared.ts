@@ -71,6 +71,8 @@ export function mapUserRow(row: UserRow): UserRecord {
     activationKey: row.activationKey,
     role: row.role as UserRecord["role"],
     plan: row.plan as PlanId,
+    translationLimitOverride: row.translationLimitOverride,
+    dictionaryLimitOverride: row.dictionaryLimitOverride,
     status: row.status as UserRecord["status"],
     registeredAt: toIsoString(row.registeredAt) ?? "",
     lastActiveAt: toIsoString(row.lastActiveAt) ?? "",
@@ -130,6 +132,26 @@ export function getDictionaryLimit(
   return settings
     ? resolveDictionaryLimit(settings, plan)
     : PLANS[plan].dictionaryLimit;
+}
+
+type UserLimitScope = {
+  plan: PlanId | string;
+  translationLimitOverride?: number | null;
+  dictionaryLimitOverride?: number | null;
+};
+
+export function getUserTranslationLimit(
+  user: UserLimitScope,
+  settings?: AdminSettingsRecord,
+) {
+  return user.translationLimitOverride ?? getPlanLimit(user.plan as PlanId, settings);
+}
+
+export function getUserDictionaryLimit(
+  user: UserLimitScope,
+  settings?: AdminSettingsRecord,
+) {
+  return user.dictionaryLimitOverride ?? getDictionaryLimit(user.plan as PlanId, settings);
 }
 
 export function activationKeyPreview(activationKey: string) {
@@ -227,14 +249,13 @@ export async function getUsageRecord(executor: DbExecutor, userId: number) {
 
 export async function incrementUsageWithinQuota(
   executor: DbExecutor,
-  userId: number,
-  plan: PlanId,
+  user: Pick<UserRecord, "id" | "plan" | "translationLimitOverride">,
   amount = 1,
 ) {
   const incrementBy = Math.max(1, Math.floor(amount));
-  const usage = await getOrCreateUsageRow(executor, userId);
+  const usage = await getOrCreateUsageRow(executor, user.id);
   const adminSettings = await getAdminSettingsRecord(executor);
-  const limit = getPlanLimit(plan, adminSettings);
+  const limit = getUserTranslationLimit(user, adminSettings);
 
   const updated = await executor
     .update(translationUsageDaily)
@@ -259,7 +280,7 @@ export async function incrementUsageWithinQuota(
 }
 
 export async function incrementUsageOrThrow(executor: DbExecutor, user: UserRecord, amount = 1) {
-  return mapUsageRow(await incrementUsageWithinQuota(executor, user.id, user.plan, amount));
+  return mapUsageRow(await incrementUsageWithinQuota(executor, user, amount));
 }
 
 export async function logActivity(

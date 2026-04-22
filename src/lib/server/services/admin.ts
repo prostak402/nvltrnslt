@@ -1,6 +1,6 @@
 import "server-only";
 
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 
 import type {
   AdminAnalyticsResponse,
@@ -17,6 +17,7 @@ import {
   paymentEvents,
   studyItemOccurrences,
   studyItems,
+  subscriptions,
   supportTickets,
   systemState,
   translationUsageDaily,
@@ -32,7 +33,9 @@ import {
 
 import {
   activationKeyPreview,
-  getPlanLimit,
+  getUserDictionaryLimit,
+  getUserRow,
+  getUserTranslationLimit,
   logAdmin,
   omitPassword,
   toIsoString,
@@ -323,11 +326,161 @@ export async function getAdminUsersData(): Promise<AdminUserRow[]> {
     wordsCount: wordsCountByUser.get(user.id) ?? 0,
     phrasesCount: phrasesCountByUser.get(user.id) ?? 0,
     translationsToday: translationsTodayByUser.get(user.id) ?? 0,
-    translationLimit: getPlanLimit(user.plan as PlanId, adminSettings),
+    translationLimit: getUserTranslationLimit(user, adminSettings),
+    translationLimitOverride: user.translationLimitOverride,
+    dictionaryLimit: getUserDictionaryLimit(user, adminSettings),
+    dictionaryLimitOverride: user.dictionaryLimitOverride,
     devicesCount: devicesCountByUser.get(user.id) ?? 0,
     totalTranslations: totalTranslationsByUser.get(user.id) ?? 0,
     activationKeyPreview: activationKeyPreview(user.activationKey),
   }));
+}
+
+export async function updateAdminUserAccess(
+  adminUserId: number,
+  input: {
+    userId: number;
+    plan?: PlanId;
+    translationLimitOverride?: number | null;
+    dictionaryLimitOverride?: number | null;
+  },
+): Promise<AdminUserRow> {
+  return getDb().transaction(async (tx) => {
+    const targetUser = await getUserRow(tx, input.userId);
+    if (!targetUser) {
+      throw new Error("USER_NOT_FOUND");
+    }
+
+    const nextPlan = input.plan ?? (targetUser.plan as PlanId);
+    const nextTranslationLimitOverride =
+      input.translationLimitOverride !== undefined
+        ? input.translationLimitOverride
+        : targetUser.translationLimitOverride;
+    const nextDictionaryLimitOverride =
+      input.dictionaryLimitOverride !== undefined
+        ? input.dictionaryLimitOverride
+        : targetUser.dictionaryLimitOverride;
+    const now = new Date();
+
+    await tx
+      .update(users)
+      .set({
+        plan: nextPlan,
+        translationLimitOverride: nextTranslationLimitOverride,
+        dictionaryLimitOverride: nextDictionaryLimitOverride,
+      })
+      .where(eq(users.id, input.userId));
+
+    if (input.plan !== undefined && input.plan !== targetUser.plan) {
+      const activeSubscriptions = await tx
+        .select({ id: subscriptions.id })
+        .from(subscriptions)
+        .where(
+          and(
+            eq(subscriptions.userId, input.userId),
+            inArray(subscriptions.status, ["active", "trial"]),
+          ),
+        );
+
+      if (activeSubscriptions.length > 0) {
+        await tx
+          .update(subscriptions)
+          .set({
+            status: "cancelled",
+            endedAt: now,
+            renewalAt: now,
+            currentPeriodEnd: now,
+            cancelAtPeriodEnd: false,
+            cancelledAt: now,
+          })
+          .where(
+            inArray(
+              subscriptions.id,
+              activeSubscriptions.map((entry) => entry.id),
+            ),
+          );
+      }
+
+      await tx.insert(subscriptions).values({
+        userId: input.userId,
+        plan: nextPlan,
+        status: "active",
+        billingProvider: "admin",
+        currentPeriodStart: now,
+        currentPeriodEnd: null,
+        cancelAtPeriodEnd: false,
+        cancelledAt: null,
+        startedAt: now,
+        renewalAt: null,
+        endedAt: null,
+      });
+    }
+
+    await logAdmin(tx, {
+      adminUserId,
+      type: "admin",
+      action: "Параметры доступа пользователя обновлены",
+      detail: JSON.stringify({
+        userId: input.userId,
+        planBefore: targetUser.plan,
+        planAfter: nextPlan,
+        translationLimitOverrideBefore: targetUser.translationLimitOverride,
+        translationLimitOverrideAfter: nextTranslationLimitOverride,
+        dictionaryLimitOverrideBefore: targetUser.dictionaryLimitOverride,
+        dictionaryLimitOverrideAfter: nextDictionaryLimitOverride,
+      }),
+    });
+
+    const [updatedUser] = await tx
+      .select()
+      .from(users)
+      .where(eq(users.id, input.userId))
+      .limit(1);
+
+    if (!updatedUser) {
+      throw new Error("USER_NOT_FOUND");
+    }
+
+    const [wordsCount, phrasesCount, usageRow, devicesCount, totalTranslations, adminSettings] =
+      await Promise.all([
+        tx
+          .select({ count: studyItems.id })
+          .from(studyItems)
+          .where(and(eq(studyItems.userId, input.userId), eq(studyItems.kind, "word"))),
+        tx
+          .select({ count: studyItems.id })
+          .from(studyItems)
+          .where(and(eq(studyItems.userId, input.userId), eq(studyItems.kind, "phrase"))),
+        tx
+          .select()
+          .from(translationUsageDaily)
+          .where(eq(translationUsageDaily.userId, input.userId)),
+        tx
+          .select({ userId: devices.userId })
+          .from(devices)
+          .where(and(eq(devices.userId, input.userId), eq(devices.status, "active"))),
+        tx
+          .select({ userId: activityEvents.userId })
+          .from(activityEvents)
+          .where(and(eq(activityEvents.userId, input.userId), eq(activityEvents.type, "translation"))),
+        getAdminSettingsRecord(tx),
+      ]);
+
+    return {
+      ...omitPassword(updatedUser),
+      wordsCount: wordsCount.length,
+      phrasesCount: phrasesCount.length,
+      translationsToday:
+        usageRow.find((entry) => entry.dayKey === startOfDayKey())?.count ?? 0,
+      translationLimit: getUserTranslationLimit(updatedUser, adminSettings),
+      translationLimitOverride: updatedUser.translationLimitOverride,
+      dictionaryLimit: getUserDictionaryLimit(updatedUser, adminSettings),
+      dictionaryLimitOverride: updatedUser.dictionaryLimitOverride,
+      devicesCount: devicesCount.length,
+      totalTranslations: totalTranslations.length,
+      activationKeyPreview: activationKeyPreview(updatedUser.activationKey),
+    };
+  });
 }
 
 export async function getAdminLogsData(): Promise<AdminLogEntry[]> {

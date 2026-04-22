@@ -25,8 +25,8 @@ import {
 
 import {
   findUserById,
-  getDictionaryLimit,
-  getPlanLimit,
+  getUserDictionaryLimit,
+  getUserTranslationLimit,
   getUsageRecord,
   toIsoString,
 } from "./shared";
@@ -113,7 +113,7 @@ export async function getPlanPageData(
     : null;
   const nextBillingIso =
     normalizedSubscription?.currentPeriodEnd ?? normalizedSubscription?.renewalAt;
-  const dictionaryLimit = getDictionaryLimit(user.plan, adminSettings);
+  const dictionaryLimit = getUserDictionaryLimit(user, adminSettings);
 
   return {
     currentPlan: {
@@ -126,7 +126,7 @@ export async function getPlanPageData(
             year: "numeric",
           })
         : "Coming soon",
-      translationsLimit: getPlanLimit(user.plan, adminSettings),
+      translationsLimit: getUserTranslationLimit(user, adminSettings),
       translationsUsed: usage.count,
       wordsLimit: dictionaryLimit,
       wordsUsed: itemRows.length,

@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import {
   COMPATIBILITY_STATUSES,
+  PLAN_ORDER,
   REVIEW_RATINGS,
   REVIEW_SESSION_MODES,
   REVIEW_TASK_TYPES,
@@ -144,6 +145,23 @@ export const adminTicketReplyBodySchema = z.object({
   text: nonEmptyString(10000),
   status: z.enum(TICKET_STATUSES).optional(),
 });
+
+export const adminUserAccessBodySchema = z
+  .object({
+    userId: positiveInt,
+    plan: z.enum(PLAN_ORDER).optional(),
+    translationLimitOverride: nullableNonNegativeInt.optional(),
+    dictionaryLimitOverride: nullableNonNegativeInt.optional(),
+  })
+  .refine(
+    (value) =>
+      value.plan !== undefined ||
+      value.translationLimitOverride !== undefined ||
+      value.dictionaryLimitOverride !== undefined,
+    {
+      message: "Измените хотя бы одно поле",
+    },
+  );
 
 export const modActivateBodySchema = z.object({
   activationKey: nonEmptyString(64),
