@@ -429,7 +429,11 @@ export default function LearningPage() {
   const [practiceSelectedIds, setPracticeSelectedIds] = useState<number[]>([]);
   const [practiceDraftIds, setPracticeDraftIds] = useState<number[]>([]);
 
-  const sourceCards = sessionSource === "practice" ? data.practicePool : data.cards;
+  const dailyFallbackToPractice =
+    sessionSource === "daily" && data.cards.length === 0 && data.practicePool.length > 0;
+  const effectiveSessionSource: LearningSessionSource = dailyFallbackToPractice ? "practice" : sessionSource;
+  const shouldSyncDailyReviews = sessionSource === "daily" && !dailyFallbackToPractice;
+  const sourceCards = effectiveSessionSource === "practice" ? data.practicePool : data.cards;
   const availableNovels = useMemo(
     () => [ALL_NOVELS_LABEL, ...new Set(sourceCards.map((card) => card.novel))],
     [sourceCards],
@@ -455,7 +459,7 @@ export default function LearningPage() {
     [activeKind, shortcutScopedCards],
   );
   const selectedPracticeCards = useMemo(() => {
-    if (sessionSource !== "practice") {
+    if (effectiveSessionSource !== "practice") {
       return filteredCards;
     }
 
@@ -474,8 +478,8 @@ export default function LearningPage() {
       filteredCards.length * 17;
 
     return shuffle(filteredCards, seed || 17).slice(0, limit);
-  }, [filteredCards, practicePreset, practiceRandomSeed, practiceRandomSize, practiceSelectedIds, sessionSource]);
-  const activeCards = sessionSource === "practice" ? selectedPracticeCards : filteredCards;
+  }, [effectiveSessionSource, filteredCards, practicePreset, practiceRandomSeed, practiceRandomSize, practiceSelectedIds]);
+  const activeCards = effectiveSessionSource === "practice" ? selectedPracticeCards : filteredCards;
   const filteredCardMap = useMemo(
     () => new Map(activeCards.map((card) => [card.id, card])),
     [activeCards],
@@ -666,7 +670,7 @@ export default function LearningPage() {
     try {
       setIsSubmitting(true);
       setMessage("");
-      if (sessionSource === "daily") {
+      if (shouldSyncDailyReviews) {
         await apiSend("/api/dashboard/review", "POST", {
           itemId: currentCard.id,
           rating,
@@ -683,7 +687,7 @@ export default function LearningPage() {
         const nextLength = previousLength - 1;
         setCurrentIndex(Math.min(previousIndex, Math.max(nextLength - 1, 0)));
       }
-      if (sessionSource === "daily") {
+      if (shouldSyncDailyReviews) {
         await reload();
       }
     } catch (requestError) {
@@ -745,16 +749,21 @@ export default function LearningPage() {
       </div>
 
       {error ? <Card className="border-danger/30 bg-danger/10 text-danger">Не удалось загрузить обучение: {error}</Card> : null}
+      {dailyFallbackToPractice ? (
+        <Card className="border-warning/30 bg-warning/10 text-warning">
+          Сегодняшняя очередь уже закрыта. Ниже доступна свободная тренировка по словарю без изменения интервалов и статусов.
+        </Card>
+      ) : null}
 
       <div className="grid grid-cols-1 lg:grid-cols-[repeat(4,minmax(0,1fr))_320px] gap-4">
         <button type="button" onClick={() => { setSelectedMode("flashcards"); resetFlashcardSession(); }} className={`rounded-2xl border p-5 text-left transition-colors ${selectedMode === "flashcards" ? "border-accent bg-accent-light/40" : "border-border bg-background-card hover:border-border-hover hover:bg-background-hover"}`}>
           <div className="flex items-start justify-between gap-4"><div><p className="text-sm font-medium text-foreground-secondary">Режим</p><h2 className="mt-1 text-xl font-semibold text-foreground">Карточки</h2></div><Brain className={`w-6 h-6 ${selectedMode === "flashcards" ? "text-accent" : "text-foreground-secondary"}`} /></div>
-          <p className="mt-3 text-sm text-foreground-secondary">{sessionSource === "daily" ? "Классический SRS-повтор: открываешь перевод, оцениваешь себя и двигаешь карточку по прогрессу." : "Свободная разминка по выбранному набору: играешь в карточки без изменения интервалов."}</p>
+          <p className="mt-3 text-sm text-foreground-secondary">{shouldSyncDailyReviews ? "Классический SRS-повтор: открываешь перевод, оцениваешь себя и двигаешь карточку по прогрессу." : "Свободная разминка по выбранному набору: играешь в карточки без изменения интервалов."}</p>
           <div className="mt-4 flex items-center gap-2"><Badge variant={selectedMode === "flashcards" ? "accent" : "default"}>{selectedMode === "pairs" ? activeCards.length : activeSessionCount} карточек в сессии</Badge><Badge variant="default">Оценка: знаю / трудно / не знаю</Badge></div>
         </button>
         <button type="button" onClick={() => { setSelectedMode("pairs"); resetFlashcardSession(); }} className={`rounded-2xl border p-5 text-left transition-colors ${selectedMode === "pairs" ? "border-accent bg-accent-light/40" : "border-border bg-background-card hover:border-border-hover hover:bg-background-hover"}`}>
           <div className="flex items-start justify-between gap-4"><div><p className="text-sm font-medium text-foreground-secondary">Режим</p><h2 className="mt-1 text-xl font-semibold text-foreground">Пары</h2></div><Layers className={`w-6 h-6 ${selectedMode === "pairs" ? "text-accent" : "text-foreground-secondary"}`} /></div>
-          <p className="mt-3 text-sm text-foreground-secondary">{sessionSource === "daily" ? "Две колонки по 5 слов, таймер на 60 секунд и мгновенная подстановка новой пары после правильного совпадения." : "Спринт по выбранному набору: можно гонять пары сколько угодно, не трогая SRS-прогресс."}</p>
+          <p className="mt-3 text-sm text-foreground-secondary">{shouldSyncDailyReviews ? "Две колонки по 5 слов, таймер на 60 секунд и мгновенная подстановка новой пары после правильного совпадения." : "Спринт по выбранному набору: можно гонять пары сколько угодно, не трогая SRS-прогресс."}</p>
           <div className="mt-4 flex items-center gap-2"><Badge variant={selectedMode === "pairs" ? "accent" : "default"}>5 слева / 5 справа</Badge><Badge variant="default">Спринт на скорость</Badge></div>
         </button>
         <button type="button" onClick={() => { setSelectedMode("ru_en_choice"); resetFlashcardSession(); }} className={`rounded-2xl border p-5 text-left transition-colors ${selectedMode === "ru_en_choice" ? "border-accent bg-accent-light/40" : "border-border bg-background-card hover:border-border-hover hover:bg-background-hover"}`}>
@@ -913,10 +922,10 @@ export default function LearningPage() {
         <Card className="space-y-4">
           <div className="space-y-2">
             <h2 className="text-xl font-semibold text-foreground">
-              {sessionSource === "daily" ? "Под эту подборку пока нет карточек" : "Набор для тренировки ещё не собран"}
+              {effectiveSessionSource === "daily" ? "Под эту подборку пока нет карточек" : "Набор для тренировки ещё не собран"}
             </h2>
             <p className="text-foreground-secondary">
-              {sessionSource === "daily"
+              {effectiveSessionSource === "daily"
                 ? "Сохрани новые слова в моде, выбери другую быструю подборку, поменяй фильтр или дождись времени следующего повторения."
                 : "Собери случайную колоду или выбери слова вручную из списка выше, и затем запускай любой игровой режим."}
             </p>
@@ -944,8 +953,8 @@ export default function LearningPage() {
         <PairsTrainer
           key={`pairs-${sessionSource}-${practicePreset}-${filteredIdsKey}`}
           cards={activeCards}
-          onReload={sessionSource === "daily" ? reload : refreshPracticePairs}
-          syncResults={sessionSource === "daily"}
+          onReload={shouldSyncDailyReviews ? reload : refreshPracticePairs}
+          syncResults={shouldSyncDailyReviews}
         />
       ) : flashcardsComplete ? (
         <div className="max-w-2xl mx-auto space-y-8">
@@ -953,7 +962,7 @@ export default function LearningPage() {
             <div className="w-20 h-20 rounded-full bg-success/15 flex items-center justify-center mx-auto"><Trophy className="w-10 h-10 text-success" /></div>
             <h2 className="text-3xl font-bold text-foreground">Сессия карточек завершена</h2>
             <p className="text-foreground-secondary">
-              {sessionSource === "daily" ? "Результаты уже сохранены в прогресс и историю действий." : "Это была свободная тренировка: ты прогнал набор, но не менял интервалы повторения."}
+              {shouldSyncDailyReviews ? "Результаты уже сохранены в прогресс и историю действий." : "Это была свободная тренировка: ты прогнал набор, но не менял интервалы повторения."}
             </p>
           </div>
           <Card className="space-y-4">
@@ -965,7 +974,7 @@ export default function LearningPage() {
           </Card>
           <div className="flex gap-3 justify-center">
             <Button variant="secondary" onClick={resetFlashcardSession}><RotateCcw className="w-4 h-4 mr-2" />Начать заново</Button>
-            {sessionSource === "daily" ? (
+            {shouldSyncDailyReviews ? (
               <Button variant="primary" href="/dashboard/progress">Перейти к прогрессу</Button>
             ) : (
               <Button variant="primary" onClick={buildRandomPracticeSet}>Собрать новый набор</Button>
@@ -1039,7 +1048,7 @@ export default function LearningPage() {
           {message ? <p className="text-sm text-foreground-secondary">{message}</p> : null}
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="flex flex-wrap items-center gap-4 text-sm text-foreground-secondary">
-              {sessionSource === "daily" ? (
+              {shouldSyncDailyReviews ? (
                 <>
                   <span className="flex items-center gap-1.5"><Clock className="w-4 h-4" />Лимит дня: {data.settings.dailyWords}</span>
                   <span>Новых в день: {data.settings.dailyNewWords}</span>
